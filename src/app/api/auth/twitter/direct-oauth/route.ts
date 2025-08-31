@@ -29,10 +29,17 @@ export async function GET(request: NextRequest) {
       clientSecret: process.env.TWITTER_CLIENT_SECRET!,
     })
 
-    // Exchange code for tokens - use dynamic redirect URI
-    const host = request.headers.get('host') || 'localhost:3000'
-    const protocol = host.includes('localhost') ? 'http' : 'https'
-    const redirectUri = `${protocol}://${host}/api/auth/twitter/direct-oauth`
+    // Exchange code for tokens - use stable production domain
+    let redirectUri: string
+    
+    if (process.env.NODE_ENV === 'production') {
+      // Use stable Vercel domain in production
+      redirectUri = 'https://talk-to-post.vercel.app/api/auth/twitter/direct-oauth'
+    } else {
+      // Use localhost in development
+      redirectUri = 'http://localhost:3000/api/auth/twitter/direct-oauth'
+    }
+    
     console.log('Using callback redirect URI:', redirectUri)
     
     const {

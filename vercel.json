@@ -10,5 +10,18 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/api/auth/twitter/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "(?!talk-to-post\\.vercel\\.app).*\\.vercel\\.app"
+        }
+      ],
+      "destination": "https://talk-to-post.vercel.app/api/auth/twitter/$1",
+      "permanent": false
+    }
   ]
 }
