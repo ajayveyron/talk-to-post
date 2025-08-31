@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         // Test basic connection
         const { data: testData, error: testError } = await supabaseAdmin
           .from('accounts')
-          .select('count(*)', { count: 'exact' })
+          .select('id')
           .limit(1)
 
         if (testError) {

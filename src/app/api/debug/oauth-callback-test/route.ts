@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
           details: 'Supabase admin client is null - check SUPABASE_SERVICE_ROLE_KEY'
         }
       } else {
-        const { error } = await supabaseAdmin.from('accounts').select('count(*)', { count: 'exact' }).limit(1)
+        const { error } = await supabaseAdmin.from('accounts').select('id').limit(1)
         if (error) {
           dbTest = {
             name: 'Database Connection',

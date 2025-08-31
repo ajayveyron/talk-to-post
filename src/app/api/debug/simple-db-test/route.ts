@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     console.log('Testing database connection...')
     const { data: testQuery, error: testError } = await supabaseAdmin
       .from('accounts')
-      .select('count(*)')
+      .select('id')
       .limit(1)
 
     if (testError) {
