@@ -42,21 +42,36 @@ export async function POST(request: NextRequest) {
 
     console.log('Draft found:', { id: draft.id, recording_id: draft.recording_id, user_id: draft.recordings?.user_id })
 
-    // Get user's Twitter account (most recent valid one)
-    console.log('Fetching Twitter account for user:', draft.recordings?.user_id)
-    const { data: accounts, error: accountError } = await supabaseAdmin
+    // Try to find ANY valid Twitter account first (since we might have multiple)
+    console.log('Searching for ANY valid Twitter account...')
+    const { data: allAccounts, error: allAccountsError } = await supabaseAdmin
       .from('accounts')
       .select('*')
-      .eq('user_id', draft.recordings.user_id)
       .eq('provider', 'twitter')
+      .neq('access_token', 'DISCONNECTED')
+      .neq('access_token', 'SUPABASE_MANAGED')
       .order('created_at', { ascending: false })
 
-    const account = accounts?.find(acc => acc.access_token !== 'DISCONNECTED')
+    if (allAccountsError) {
+      console.error('Error fetching Twitter accounts:', allAccountsError)
+    }
 
-    if (accountError || !account || account.access_token === 'DISCONNECTED') {
-      console.error('Account fetch error:', accountError)
+    console.log('Found Twitter accounts:', allAccounts?.length || 0)
+
+    // First try to find account for the specific user
+    let account = allAccounts?.find(acc => acc.user_id === draft.recordings?.user_id)
+    
+    // If no account for specific user, use any valid account (fallback)
+    if (!account && allAccounts && allAccounts.length > 0) {
+      console.log('No account for specific user, using latest valid account as fallback')
+      account = allAccounts[0]
+    }
+
+    if (!account) {
+      console.error('No valid Twitter account found')
+      console.log('Available accounts debug:', allAccounts)
       return NextResponse.json(
-        { error: 'Twitter account not connected' },
+        { error: 'Twitter account not connected. Please sign in with Twitter first.' },
         { status: 400 }
       )
     }

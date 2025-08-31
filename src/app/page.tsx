@@ -108,12 +108,36 @@ export default function Home() {
     }
   }, [])
 
-  const checkTwitterConnection = () => {
-    // Check localStorage for Twitter connection status
-    const connected = localStorage.getItem('twitter_connected') === 'true'
+  const checkTwitterConnection = async () => {
+    // Check localStorage for Twitter connection status first
+    const localConnected = localStorage.getItem('twitter_connected') === 'true'
     const username = localStorage.getItem('twitter_username')
-    if (connected && username) {
+    
+    if (localConnected && username) {
       setTwitterConnected(true)
+    }
+
+    // Also check server-side Twitter status for accuracy
+    try {
+      const response = await fetch('/api/check-twitter-status')
+      const data = await response.json()
+      
+      if (data.success && data.summary.has_usable_account) {
+        setTwitterConnected(true)
+        // Update localStorage to match server state
+        localStorage.setItem('twitter_connected', 'true')
+        if (data.latest_valid_account?.screen_name) {
+          localStorage.setItem('twitter_username', data.latest_valid_account.screen_name)
+        }
+      } else if (!localConnected) {
+        // Only clear if localStorage also says not connected
+        setTwitterConnected(false)
+        localStorage.removeItem('twitter_connected')
+        localStorage.removeItem('twitter_username')
+      }
+    } catch (error) {
+      console.error('Failed to check Twitter status:', error)
+      // Keep localStorage state if server check fails
     }
   }
 
