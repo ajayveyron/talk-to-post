@@ -39,7 +39,7 @@ export async function POST(
     // TODO: Add to BullMQ queue for background processing
     // For now, we'll trigger transcription directly
     try {
-      await processRecording(recordingId)
+      await processRecording(recordingId, request)
     } catch (error) {
       console.error('Processing error:', error)
       // Update status to failed
@@ -67,30 +67,49 @@ export async function POST(
   }
 }
 
-async function processRecording(recordingId: string) {
+async function processRecording(recordingId: string, request?: NextRequest) {
   // This function will be moved to a background job
   // For now, we'll call the transcription and drafting APIs directly
   
+  // Construct base URL for API calls
+  const baseUrl = process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.NEXTAUTH_URL
+    || (request ? (request.headers.get('origin') || `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('host')}`) : null)
+    || 'https://talk-to-post.vercel.app' // Fallback to stable domain
+  
+  console.log('Using base URL for API calls:', baseUrl)
+  
   // Step 1: Transcribe
-  const transcribeResponse = await fetch(`${process.env.NEXTAUTH_URL}/api/transcribe`, {
+  const transcribeUrl = `${baseUrl}/api/transcribe`
+  console.log('Calling transcribe API:', transcribeUrl)
+  
+  const transcribeResponse = await fetch(transcribeUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ recording_id: recordingId }),
   })
 
   if (!transcribeResponse.ok) {
-    throw new Error('Transcription failed')
+    const errorText = await transcribeResponse.text()
+    console.error('Transcription failed:', transcribeResponse.status, errorText)
+    throw new Error(`Transcription failed: ${transcribeResponse.status} ${errorText}`)
   }
 
   // Step 2: Generate draft
-  const draftResponse = await fetch(`${process.env.NEXTAUTH_URL}/api/draft`, {
+  const draftUrl = `${baseUrl}/api/draft`
+  console.log('Calling draft API:', draftUrl)
+  
+  const draftResponse = await fetch(draftUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ recording_id: recordingId }),
   })
 
   if (!draftResponse.ok) {
-    throw new Error('Draft generation failed')
+    const errorText = await draftResponse.text()
+    console.error('Draft generation failed:', draftResponse.status, errorText)
+    throw new Error(`Draft generation failed: ${draftResponse.status} ${errorText}`)
   }
 
   // Update status to ready
