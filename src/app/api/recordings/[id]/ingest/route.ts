@@ -72,11 +72,9 @@ async function processRecording(recordingId: string, request?: NextRequest) {
   // For now, we'll call the transcription and drafting APIs directly
   
   // Construct base URL for API calls
-  const baseUrl = process.env.VERCEL_URL 
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.NEXTAUTH_URL
-    || (request ? (request.headers.get('origin') || `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('host')}`) : null)
-    || 'https://talk-to-post.vercel.app' // Fallback to stable domain
+  const baseUrl = process.env.NODE_ENV === 'production'
+    ? 'https://talk-to-post.vercel.app' // Always use stable domain in production
+    : 'http://localhost:3000' // Use localhost in development
   
   console.log('Using base URL for API calls:', baseUrl)
   

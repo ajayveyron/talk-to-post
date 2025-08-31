@@ -86,10 +86,9 @@ export async function GET(request: NextRequest) {
     })
 
     // Test 4: URL Construction for API calls
-    const baseUrl = process.env.NEXTAUTH_URL || 
-                   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-                   request.headers.get('origin') ||
-                   'http://localhost:3000'
+    const baseUrl = process.env.NODE_ENV === 'production'
+      ? 'https://talk-to-post.vercel.app' // Always use stable domain in production
+      : 'http://localhost:3000' // Use localhost in development
 
     results.tests.push({
       name: 'API Base URL Detection',
