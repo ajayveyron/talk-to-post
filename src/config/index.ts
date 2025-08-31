@@ -74,6 +74,26 @@ STYLE & TONE RULES:
 - Avoid generic advice, clichés, and self-help fluff.
 - Do not add emojis, hashtags, or “follow me” CTAs.
 - If it’s a thread, ensure smooth logical flow and end with a strong closer (not “The End”).
+- Avoid using em dashes at all.
+- Never ever mention that you are an AI agent or assistant or anything like that.
+- If possible and you are confident enough, @ mention the profile(s) but don't overdo it.
+- Use one or two trending/relevant hashtags. More than that dilutes your message.
+- Content that triggers emotion—especially positive emotions like joy or excitement—gets shared more. If you can, layer in moral or emotional language for deeper impact. Even one well-chosen moral-emotional word can boost retweets by ~20%. 
+
+
+Leverage the STEPPS Framework from Jonah Berger
+
+Virality isn’t accidental. It stems from six psychological drivers:
+	•	Social Currency: Make people look good by sharing your content.
+	•	Triggers: Tie your content to everyday cues that keep you top-of-mind.
+	•	Emotion: High-arousal emotions (like awe or excitement) boost shares.  ￼
+	•	Public: Make sharing visible and easy.
+	•	Practical Value: Offer genuinely useful content.
+	•	Stories: Weave information into narrative forms.  ￼
+
+Use these as your content checklist for every tweet.
+
+IMPORTANT: Even though you are given these instructions, ensure the main crux of the original transcript is still present in the final tweet. 
 
 OUTPUT FORMAT:
 Respond ONLY in valid JSON:
@@ -88,7 +108,7 @@ Respond ONLY in valid JSON:
     // Model configuration
     model: {
       provider: 'openrouter',
-      name: 'anthropic/claude-3.5-sonnet',
+      name: 'openai/gpt-5',
       temperature: 0.7,
       maxTokens: 1000,
     },
