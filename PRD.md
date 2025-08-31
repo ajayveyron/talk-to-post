@@ -1,7 +1,3 @@
-Here’s a full PRD (product requirements document) you can drop straight into Cursor or any AI coding assistant. I’ve written it as if you’re briefing an engineer team, with enough technical precision that a code editor can scaffold the system for you.
-
-⸻
-
 PRD: Voice-to-Twitter AI Posting Platform
 
 1. Overview
@@ -215,7 +211,3 @@ V2
 	•	Queue: BullMQ + Redis
 	•	AI: OpenAI (STT + LLM)
 	•	Social: Twitter/X API v2 (OAuth 2.0, write tweets)
-
-⸻
-
-Do you want me to write this PRD in a Cursor-ready repo scaffold format (with /frontend, /backend, /db/schema.sql, /docs/PRD.md) so you can just paste and let it generate files?
