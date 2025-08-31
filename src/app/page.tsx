@@ -62,8 +62,6 @@ export default function Home() {
   const [editedTweets, setEditedTweets] = useState<{ text: string; char_count: number }[]>([])
   const [twitterConnected, setTwitterConnected] = useState(false)
   const [spacebarPressed, setSpacebarPressed] = useState(false)
-  const [micPressed, setMicPressed] = useState(false)
-  const [holdTimer, setHoldTimer] = useState<NodeJS.Timeout | null>(null)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
   const [requestingPermission, setRequestingPermission] = useState(false)
 
@@ -218,68 +216,10 @@ export default function Home() {
     }
   }, [spacebarPressed, isRecording]) // Dependencies to ensure fresh state
 
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (holdTimer) {
-        clearTimeout(holdTimer)
-      }
-    }
-  }, [holdTimer])
-
-  // Mic press-and-hold handlers
-  const handleMicPressStart = (event: React.MouseEvent | React.TouchEvent) => {
-    event.preventDefault()
-    if (loading) return
-
-    console.log('Mic press start')
-    setMicPressed(true)
+  // Simple mic click handler - just toggle recording
+  const handleMicClick = () => {
+    if (loading || hasPermission !== true) return
     
-    // Set a timer for hold detection (300ms - shorter for better UX)
-    const timer = setTimeout(() => {
-      console.log('Hold detected - starting recording')
-      // This is a hold - start recording if not already recording
-      if (!isRecording) {
-        startRecording()
-      }
-    }, 300)
-    
-    setHoldTimer(timer)
-  }
-
-  const handleMicPressEnd = (event: React.MouseEvent | React.TouchEvent) => {
-    event.preventDefault()
-    console.log('Mic press end', { micPressed, isRecording, holdTimer: !!holdTimer })
-    
-    // Check if this was a quick tap (timer still active)
-    const wasQuickTap = !!holdTimer
-    
-    // Clear the hold timer
-    if (holdTimer) {
-      clearTimeout(holdTimer)
-      setHoldTimer(null)
-      
-      // If it was a quick tap and we're not recording, start recording
-      if (wasQuickTap && !isRecording) {
-        console.log('Quick tap detected - starting recording')
-        startRecording()
-      }
-    }
-
-    // If we were in hold mode and recording, stop recording
-    if (micPressed && isRecording && !wasQuickTap) {
-      console.log('Hold release - stopping recording')
-      stopRecording()
-    }
-    
-    setMicPressed(false)
-  }
-
-  const handleMicClick = (event: React.MouseEvent) => {
-    // This is a fallback for click events that don't go through press/release
-    console.log('Mic click fallback')
-    
-    // Toggle recording
     if (isRecording) {
       stopRecording()
     } else {
@@ -680,25 +620,16 @@ export default function Home() {
             <Fab
               color={isRecording ? "secondary" : "primary"}
               size="large"
-              onMouseDown={handleMicPressStart}
-              onMouseUp={handleMicPressEnd}
-              onMouseLeave={handleMicPressEnd}
-              onTouchStart={handleMicPressStart}
-              onTouchEnd={handleMicPressEnd}
-              onTouchCancel={handleMicPressEnd}
+              onClick={handleMicClick}
               disabled={loading || hasPermission === null}
               sx={{ 
                 mb: 2,
                 transform: isRecording ? 'scale(1.1)' : 'scale(1)',
                 transition: 'transform 0.2s ease-in-out',
                 boxShadow: isRecording ? 4 : 2,
-                userSelect: 'none',
-                WebkitTouchCallout: 'none',
-                WebkitUserSelect: 'none',
                 cursor: 'pointer',
                 minHeight: '64px',
                 minWidth: '64px',
-                touchAction: 'manipulation',
                 opacity: hasPermission === null ? 0.5 : 1
               }}
             >
@@ -725,10 +656,10 @@ export default function Home() {
             color={isRecording ? "secondary.main" : "text.secondary"}
             sx={{ mb: 1, fontWeight: isRecording ? 600 : 400 }}
           >
-            {hasPermission === false ? '🔒 Please enable microphone access above' :
+{hasPermission === false ? '🔒 Please enable microphone access above' :
              hasPermission === null ? '🎤 Setting up microphone...' :
-             isRecording ? '🔴 Recording... Click stop or release mic' : 
-             '🎤 Ready to record - tap or hold'}
+             isRecording ? '🔴 Recording... Click stop or tap mic again' : 
+             '🎤 Ready to record - tap to start'}
           </Typography>
           
           {hasPermission === true && !isRecording && (
@@ -741,13 +672,13 @@ export default function Home() {
                 fontStyle: 'italic'
               }}
             >
-              💡 Desktop: Hold <kbd style={{
+💡 Desktop: Hold <kbd style={{
                 background: '#f5f5f5', 
                 padding: '2px 6px', 
                 borderRadius: '4px',
                 fontSize: '0.85em',
                 fontFamily: 'monospace'
-              }}>SPACEBAR</kbd> • Mobile: Tap or hold mic button
+              }}>SPACEBAR</kbd> • Mobile: Tap mic button
             </Typography>
           )}
         </Box>
