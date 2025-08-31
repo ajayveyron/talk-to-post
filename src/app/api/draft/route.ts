@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { getSystemPrompt, getAIConfig } from '@/config'
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +11,10 @@ export async function POST(request: NextRequest) {
         { error: 'Recording ID is required' },
         { status: 400 }
       )
+    }
+
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database unavailable' }, { status: 500 })
     }
 
     // Get the transcript for this recording
@@ -27,12 +32,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Use OpenRouter to refine the transcript
-    const draftingPrompt = `You are an editor for startup/tech Twitter.
-- Remove filler, hedging, repetition.
-- Output either single tweet or thread (1 idea per tweet).
-- Max 280 chars per tweet.
-- Keep proper nouns as-is.
-- Output JSON: { "mode": "tweet"|"thread", "tweets": [{"text": "...", "char_count": 123}, ...] }.
+    const systemPrompt = getSystemPrompt()
+    const draftingPrompt = `${systemPrompt}
 
 TRANSCRIPT:
 ${transcript.text}`
@@ -46,15 +47,15 @@ ${transcript.text}`
         'X-Title': 'Voice-to-Twitter AI Platform',
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-3.5-sonnet',
+        model: getAIConfig().model.name,
         messages: [
           {
             role: 'user',
             content: draftingPrompt,
           },
         ],
-        temperature: 0.7,
-        max_tokens: 1000,
+        temperature: getAIConfig().model.temperature,
+        max_tokens: getAIConfig().model.maxTokens,
       }),
     })
 
@@ -99,7 +100,7 @@ ${transcript.text}`
     }
 
     // Save draft to database
-    const { data: draft, error: draftError } = await supabaseAdmin
+    const { data: draft, error: draftError } = await supabaseAdmin!
       .from('drafts')
       .insert({
         recording_id: recording_id,
@@ -119,7 +120,7 @@ ${transcript.text}`
     }
 
     // Update recording status to ready
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin!
       .from('recordings')
       .update({ status: 'ready' })
       .eq('id', recording_id)
@@ -139,7 +140,7 @@ ${transcript.text}`
     
     // Update recording status to failed
     const body = await request.json().catch(() => ({}))
-    if (body.recording_id) {
+    if (body.recording_id && supabaseAdmin) {
       await supabaseAdmin
         .from('recordings')
         .update({ status: 'failed' })
