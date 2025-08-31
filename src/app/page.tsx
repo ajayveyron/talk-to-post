@@ -64,6 +64,8 @@ export default function Home() {
   const [spacebarPressed, setSpacebarPressed] = useState(false)
   const [micPressed, setMicPressed] = useState(false)
   const [holdTimer, setHoldTimer] = useState<NodeJS.Timeout | null>(null)
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null)
+  const [requestingPermission, setRequestingPermission] = useState(false)
 
     useEffect(() => {
     fetchRecordings()
@@ -107,6 +109,65 @@ export default function Home() {
       // Remove the error parameter
       window.history.replaceState({}, '', window.location.pathname)
     }
+  }, [])
+
+  // Check microphone permission status and request if needed
+  const checkAndRequestMicrophonePermission = async () => {
+    try {
+      if (typeof window === 'undefined') {
+        return
+      }
+
+      // Check if getUserMedia is available
+      if (!navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const isHTTPS = window.location.protocol === 'https:'
+        if (!isHTTPS && window.location.hostname !== 'localhost') {
+          setError('Microphone access requires HTTPS. Please use the secure version of this site.')
+          setHasPermission(false)
+          return
+        }
+        setError('Microphone access is not supported in this browser. Try using Chrome, Firefox, or Safari.')
+        setHasPermission(false)
+        return
+      }
+
+      // Try to check permission status first
+      if (navigator.permissions) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+          
+          if (permission.state === 'granted') {
+            setHasPermission(true)
+            return
+          } else if (permission.state === 'denied') {
+            setHasPermission(false)
+            setError('Microphone access was denied. Please enable it in your browser settings and refresh the page.')
+            return
+          }
+          // If state is 'prompt', we'll request permission below
+        } catch (e) {
+          console.log('Permission query not supported, will request directly')
+        }
+      }
+
+      // Request permission proactively
+      console.log('Requesting microphone permission on page load...')
+      await requestMicrophonePermission()
+      
+    } catch (error) {
+      console.log('Permission check failed:', error)
+      setHasPermission(null) // Will try again when user attempts to record
+    }
+  }
+
+  // Check and request permission on mount
+  useEffect(() => {
+    // Small delay to ensure page is fully loaded
+    const timer = setTimeout(() => {
+      checkAndRequestMicrophonePermission()
+    }, 1000)
+    
+    return () => clearTimeout(timer)
   }, [])
 
   // Listen for auth state changes and update Twitter connection status
@@ -278,8 +339,12 @@ export default function Home() {
     }
   }
 
-  const startRecording = async () => {
+  // Request microphone permission
+  const requestMicrophonePermission = async () => {
     try {
+      setRequestingPermission(true)
+      setError(null)
+
       // Check if we're in a browser environment
       if (typeof window === 'undefined') {
         throw new Error('Recording is not available on server-side')
@@ -292,6 +357,39 @@ export default function Home() {
           throw new Error('Microphone access requires HTTPS. Please use the secure version of this site.')
         }
         throw new Error('Microphone access is not supported in this browser. Try using Chrome, Firefox, or Safari.')
+      }
+
+      // Request permission
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Stop the stream immediately - we just wanted permission
+      stream.getTracks().forEach(track => track.stop())
+      
+      setHasPermission(true)
+      setError(null)
+      return true
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to access microphone'
+      setError(`Permission denied: ${errorMessage}`)
+      setHasPermission(false)
+      console.error('Permission error:', err)
+      return false
+    } finally {
+      setRequestingPermission(false)
+    }
+  }
+
+  const startRecording = async () => {
+    try {
+      // Check if we have permission first
+      if (hasPermission === false) {
+        setError('Microphone permission is required. Please click "Allow Microphone" first.')
+        return
+      }
+
+      if (hasPermission === null) {
+        // Try to get permission
+        const granted = await requestMicrophonePermission()
+        if (!granted) return
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -314,7 +412,7 @@ export default function Home() {
         }
       })
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to access microphone'
+      const errorMessage = err instanceof Error ? err.message : 'Failed to start recording'
       setError(`Recording failed: ${errorMessage}`)
       console.error('Recording error:', err)
     }
@@ -563,34 +661,63 @@ export default function Home() {
           bgcolor: 'background.paper',
           boxShadow: 1
         }}>
-          <Fab
-            color={isRecording ? "secondary" : "primary"}
-            size="large"
-            onMouseDown={handleMicPressStart}
-            onMouseUp={handleMicPressEnd}
-            onMouseLeave={handleMicPressEnd}
-            onTouchStart={handleMicPressStart}
-            onTouchEnd={handleMicPressEnd}
-            onTouchCancel={handleMicPressEnd}
-            disabled={loading}
-            sx={{ 
-              mb: 2,
-              transform: isRecording ? 'scale(1.1)' : 'scale(1)',
-              transition: 'transform 0.2s ease-in-out',
-              boxShadow: isRecording ? 4 : 2,
-              userSelect: 'none', // Prevent text selection on press-and-hold
-              WebkitTouchCallout: 'none', // Disable iOS callout
-              WebkitUserSelect: 'none',
-              cursor: 'pointer',
-              // Make it more touch-friendly
-              minHeight: '64px',
-              minWidth: '64px',
-              // Prevent double-tap zoom on mobile
-              touchAction: 'manipulation'
-            }}
-          >
-            {isRecording ? <MicOff /> : <Mic />}
-          </Fab>
+          {/* Permission Request Button - only show if explicitly denied */}
+          {hasPermission === false && (
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={requestMicrophonePermission}
+              disabled={requestingPermission}
+              sx={{ mb: 2 }}
+              startIcon={<Mic />}
+            >
+              {requestingPermission ? 'Requesting Access...' : 'Enable Microphone'}
+            </Button>
+          )}
+
+          {/* Recording Button - show when permission is granted or being checked */}
+          {(hasPermission === true || hasPermission === null) && (
+            <Fab
+              color={isRecording ? "secondary" : "primary"}
+              size="large"
+              onMouseDown={handleMicPressStart}
+              onMouseUp={handleMicPressEnd}
+              onMouseLeave={handleMicPressEnd}
+              onTouchStart={handleMicPressStart}
+              onTouchEnd={handleMicPressEnd}
+              onTouchCancel={handleMicPressEnd}
+              disabled={loading || hasPermission === null}
+              sx={{ 
+                mb: 2,
+                transform: isRecording ? 'scale(1.1)' : 'scale(1)',
+                transition: 'transform 0.2s ease-in-out',
+                boxShadow: isRecording ? 4 : 2,
+                userSelect: 'none',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                cursor: 'pointer',
+                minHeight: '64px',
+                minWidth: '64px',
+                touchAction: 'manipulation',
+                opacity: hasPermission === null ? 0.5 : 1
+              }}
+            >
+              {isRecording ? <MicOff /> : <Mic />}
+            </Fab>
+          )}
+
+          {/* Stop Button - always visible when recording */}
+          {isRecording && (
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={stopRecording}
+              sx={{ mb: 2 }}
+              startIcon={<MicOff />}
+            >
+              Stop Recording
+            </Button>
+          )}
 
           <Typography 
             variant="body1" 
@@ -598,26 +725,31 @@ export default function Home() {
             color={isRecording ? "secondary.main" : "text.secondary"}
             sx={{ mb: 1, fontWeight: isRecording ? 600 : 400 }}
           >
-{isRecording ? '🔴 Recording... Tap or release to stop' : '🎤 Tap to record or hold for hands-free'}
+            {hasPermission === false ? '🔒 Please enable microphone access above' :
+             hasPermission === null ? '🎤 Setting up microphone...' :
+             isRecording ? '🔴 Recording... Click stop or release mic' : 
+             '🎤 Ready to record - tap or hold'}
           </Typography>
           
-          <Typography 
-            variant="body2" 
-            align="center" 
-            color="text.secondary"
-            sx={{ 
-              opacity: 0.7,
-              fontStyle: 'italic'
-            }}
-          >
-            💡 Desktop: Hold <kbd style={{
-              background: '#f5f5f5', 
-              padding: '2px 6px', 
-              borderRadius: '4px',
-              fontSize: '0.85em',
-              fontFamily: 'monospace'
-            }}>SPACEBAR</kbd> • Mobile: Tap or hold mic button
-          </Typography>
+          {hasPermission === true && !isRecording && (
+            <Typography 
+              variant="body2" 
+              align="center" 
+              color="text.secondary"
+              sx={{ 
+                opacity: 0.7,
+                fontStyle: 'italic'
+              }}
+            >
+              💡 Desktop: Hold <kbd style={{
+                background: '#f5f5f5', 
+                padding: '2px 6px', 
+                borderRadius: '4px',
+                fontSize: '0.85em',
+                fontFamily: 'monospace'
+              }}>SPACEBAR</kbd> • Mobile: Tap or hold mic button
+            </Typography>
+          )}
         </Box>
 
         {loading && (
