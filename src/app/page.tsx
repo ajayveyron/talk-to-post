@@ -108,6 +108,16 @@ export default function Home() {
     }
   }, [])
 
+  // Listen for auth state changes and update Twitter connection status
+  useEffect(() => {
+    if (!user) {
+      // User signed out - clear Twitter connection
+      setTwitterConnected(false)
+      localStorage.removeItem('twitter_connected')
+      localStorage.removeItem('twitter_username')
+    }
+  }, [user])
+
   const checkTwitterConnection = async () => {
     // Check localStorage for Twitter connection status first
     const localConnected = localStorage.getItem('twitter_connected') === 'true'
@@ -115,6 +125,8 @@ export default function Home() {
     
     if (localConnected && username) {
       setTwitterConnected(true)
+    } else {
+      setTwitterConnected(false)
     }
 
     // Also check server-side Twitter status for accuracy
@@ -129,15 +141,18 @@ export default function Home() {
         if (data.latest_valid_account?.screen_name) {
           localStorage.setItem('twitter_username', data.latest_valid_account.screen_name)
         }
-      } else if (!localConnected) {
-        // Only clear if localStorage also says not connected
+      } else {
+        // Server says no connection - clear everything
         setTwitterConnected(false)
         localStorage.removeItem('twitter_connected')
         localStorage.removeItem('twitter_username')
       }
     } catch (error) {
       console.error('Failed to check Twitter status:', error)
-      // Keep localStorage state if server check fails
+      // If server check fails and localStorage says not connected, assume disconnected
+      if (!localConnected) {
+        setTwitterConnected(false)
+      }
     }
   }
 
@@ -254,6 +269,32 @@ export default function Home() {
     }
   }
 
+  const handleDisconnect = async () => {
+    try {
+      setLoading(true)
+      console.log('Disconnecting from Twitter...')
+      
+      // Sign out from Supabase
+      await signOut()
+      
+      // Clear Twitter connection state
+      setTwitterConnected(false)
+      localStorage.removeItem('twitter_connected')
+      localStorage.removeItem('twitter_username')
+      
+      // Clear any error messages
+      setError(null)
+      
+      console.log('Successfully disconnected from Twitter')
+    } catch (err) {
+      console.error('Disconnect error:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to disconnect'
+      setError(`Disconnect failed: ${errorMessage}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSaveDraft = async () => {
     // TODO: Implement draft update API
     setEditingDraft(null)
@@ -353,7 +394,7 @@ export default function Home() {
                 {!authLoading && (
                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
                     {user || twitterConnected ? (
-                      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                         <Chip
                           icon={<CheckCircle />}
                           label={twitterConnected ? "Twitter Connected" : "User Signed In"}
@@ -361,15 +402,26 @@ export default function Home() {
                           variant="outlined"
                         />
                         {twitterConnected && (
-                          <Button
-                            variant="outlined"
-                            color="info"
-                            onClick={handleTestTwitter}
-                            disabled={loading || testing}
-                            size="small"
-                          >
-                            {testing ? 'Testing...' : 'Test Twitter'}
-                          </Button>
+                          <>
+                            <Button
+                              variant="outlined"
+                              color="info"
+                              onClick={handleTestTwitter}
+                              disabled={loading || testing}
+                              size="small"
+                            >
+                              {testing ? 'Testing...' : 'Test Twitter'}
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              onClick={handleDisconnect}
+                              disabled={loading}
+                              size="small"
+                            >
+                              {loading ? 'Disconnecting...' : 'Disconnect'}
+                            </Button>
+                          </>
                         )}
                       </Box>
                     ) : (
