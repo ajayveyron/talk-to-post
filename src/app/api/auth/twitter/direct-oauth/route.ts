@@ -29,7 +29,12 @@ export async function GET(request: NextRequest) {
       clientSecret: process.env.TWITTER_CLIENT_SECRET!,
     })
 
-    // Exchange code for tokens
+    // Exchange code for tokens - use dynamic redirect URI
+    const host = request.headers.get('host') || 'localhost:3000'
+    const protocol = host.includes('localhost') ? 'http' : 'https'
+    const redirectUri = `${protocol}://${host}/api/auth/twitter/direct-oauth`
+    console.log('Using callback redirect URI:', redirectUri)
+    
     const {
       client: loggedClient,
       accessToken,
@@ -38,7 +43,7 @@ export async function GET(request: NextRequest) {
     } = await twitterClient.loginWithOAuth2({
       code,
       codeVerifier,
-      redirectUri: process.env.TWITTER_REDIRECT_URI!,
+      redirectUri,
     })
 
     console.log('Twitter OAuth successful, getting user info...')

@@ -19,8 +19,10 @@ async function handleTwitterOAuth(request: NextRequest) {
       clientSecret: process.env.TWITTER_CLIENT_SECRET!,
     })
 
-    // Generate OAuth2 authorization link
-    const redirectUri = `${request.headers.get('origin') || 'http://localhost:3000'}/api/auth/twitter/direct-oauth`
+    // Generate OAuth2 authorization link - use dynamic redirect URI
+    const host = request.headers.get('host') || 'localhost:3000'
+    const protocol = host.includes('localhost') ? 'http' : 'https'
+    const redirectUri = `${protocol}://${host}/api/auth/twitter/direct-oauth`
     console.log('Using redirect URI:', redirectUri)
 
     const { url, codeVerifier, state } = twitterClient.generateOAuth2AuthLink(
