@@ -1,3 +1,14 @@
 {
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "X-Vercel-Skip-Toolbar",
+          "value": "1"
+        }
+      ]
+    }
+  ]
 }
