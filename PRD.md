@@ -198,7 +198,7 @@ MVP
 	•	OAuth with X.
 	•	Voice record + upload.
 	•	Transcription.
-	•	Draft AI (tweet/thread).
+	•	Draft AI (tweet/thread). - using Openrouter - Chatgpt model
 	•	Post to X.
 
 V2

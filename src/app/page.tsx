@@ -60,9 +60,10 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [editingDraft, setEditingDraft] = useState<Draft | null>(null)
   const [editedTweets, setEditedTweets] = useState<{ text: string; char_count: number }[]>([])
-  const [testResults, setTestResults] = useState<any>(null)
-  const [testing, setTesting] = useState(false)
   const [twitterConnected, setTwitterConnected] = useState(false)
+  const [spacebarPressed, setSpacebarPressed] = useState(false)
+  const [micPressed, setMicPressed] = useState(false)
+  const [holdTimer, setHoldTimer] = useState<NodeJS.Timeout | null>(null)
 
     useEffect(() => {
     fetchRecordings()
@@ -118,6 +119,113 @@ export default function Home() {
     }
   }, [user])
 
+  // Spacebar recording functionality
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only trigger if spacebar is pressed, not in an input field, and not already pressed
+      if (event.code === 'Space' && 
+          !spacebarPressed && 
+          !isRecording &&
+          event.target instanceof Element &&
+          !['input', 'textarea', 'select'].includes(event.target.tagName.toLowerCase()) &&
+          !event.target.closest('[contenteditable]')) {
+        
+        event.preventDefault()
+        setSpacebarPressed(true)
+        startRecording()
+      }
+    }
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && spacebarPressed) {
+        event.preventDefault()
+        setSpacebarPressed(false)
+        if (isRecording) {
+          stopRecording()
+        }
+      }
+    }
+
+    // Add event listeners
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keyup', handleKeyUp)
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [spacebarPressed, isRecording]) // Dependencies to ensure fresh state
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer)
+      }
+    }
+  }, [holdTimer])
+
+  // Mic press-and-hold handlers
+  const handleMicPressStart = (event: React.MouseEvent | React.TouchEvent) => {
+    event.preventDefault()
+    if (loading) return
+
+    console.log('Mic press start')
+    setMicPressed(true)
+    
+    // Set a timer for hold detection (300ms - shorter for better UX)
+    const timer = setTimeout(() => {
+      console.log('Hold detected - starting recording')
+      // This is a hold - start recording if not already recording
+      if (!isRecording) {
+        startRecording()
+      }
+    }, 300)
+    
+    setHoldTimer(timer)
+  }
+
+  const handleMicPressEnd = (event: React.MouseEvent | React.TouchEvent) => {
+    event.preventDefault()
+    console.log('Mic press end', { micPressed, isRecording, holdTimer: !!holdTimer })
+    
+    // Check if this was a quick tap (timer still active)
+    const wasQuickTap = !!holdTimer
+    
+    // Clear the hold timer
+    if (holdTimer) {
+      clearTimeout(holdTimer)
+      setHoldTimer(null)
+      
+      // If it was a quick tap and we're not recording, start recording
+      if (wasQuickTap && !isRecording) {
+        console.log('Quick tap detected - starting recording')
+        startRecording()
+      }
+    }
+
+    // If we were in hold mode and recording, stop recording
+    if (micPressed && isRecording && !wasQuickTap) {
+      console.log('Hold release - stopping recording')
+      stopRecording()
+    }
+    
+    setMicPressed(false)
+  }
+
+  const handleMicClick = (event: React.MouseEvent) => {
+    // This is a fallback for click events that don't go through press/release
+    console.log('Mic click fallback')
+    
+    // Toggle recording
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }
+
   const checkTwitterConnection = async () => {
     // Check localStorage for Twitter connection status first
     const localConnected = localStorage.getItem('twitter_connected') === 'true'
@@ -172,7 +280,27 @@ export default function Home() {
 
   const startRecording = async () => {
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined') {
+        throw new Error('Recording is not available on server-side')
+      }
+
+      // Check if getUserMedia is available
+      if (!navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const isHTTPS = window.location.protocol === 'https:'
+        if (!isHTTPS && window.location.hostname !== 'localhost') {
+          throw new Error('Microphone access requires HTTPS. Please use the secure version of this site.')
+        }
+        throw new Error('Microphone access is not supported in this browser. Try using Chrome, Firefox, or Safari.')
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      
+      // Check if MediaRecorder is supported
+      if (!window.MediaRecorder) {
+        throw new Error('Audio recording is not supported in this browser')
+      }
+
       const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
       
       recorder.start()
@@ -186,7 +314,8 @@ export default function Home() {
         }
       })
     } catch (err) {
-      setError('Failed to access microphone')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to access microphone'
+      setError(`Recording failed: ${errorMessage}`)
       console.error('Recording error:', err)
     }
   }
@@ -340,33 +469,7 @@ export default function Home() {
     }
   }
 
-  const handleTestTwitter = async () => {
-    if (!twitterConnected) {
-      setError('Please connect your Twitter account first')
-      return
-    }
 
-    try {
-      setTesting(true)
-      setTestResults(null)
-      setError(null)
-      
-      const response = await fetch('/api/test-twitter-posting', {
-        method: 'POST',
-      })
-      
-      const result = await response.json()
-      setTestResults(result)
-      
-      if (!result.success) {
-        setError(`Test failed at step: ${result.step}. ${result.error}`)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Test failed')
-    } finally {
-      setTesting(false)
-    }
-  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -402,26 +505,15 @@ export default function Home() {
                           variant="outlined"
                         />
                         {twitterConnected && (
-                          <>
-                            <Button
-                              variant="outlined"
-                              color="info"
-                              onClick={handleTestTwitter}
-                              disabled={loading || testing}
-                              size="small"
-                            >
-                              {testing ? 'Testing...' : 'Test Twitter'}
-                            </Button>
-                            <Button
-                              variant="outlined"
-                              color="error"
-                              onClick={handleDisconnect}
-                              disabled={loading}
-                              size="small"
-                            >
-                              {loading ? 'Disconnecting...' : 'Disconnect'}
-                            </Button>
-                          </>
+                          <Button
+                            variant="outlined"
+                            color="error"
+                            onClick={handleDisconnect}
+                            disabled={loading}
+                            size="small"
+                          >
+                            {loading ? 'Disconnecting...' : 'Disconnect'}
+                          </Button>
                         )}
                       </Box>
                     ) : (
@@ -446,49 +538,7 @@ export default function Home() {
                   </Box>
                 )}
 
-        {/* Setup Instructions for New Users */}
-        {!authLoading && !user && (
-          <Alert severity="info" sx={{ mb: 2, maxWidth: '600px', mx: 'auto' }}>
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-              🚀 First Time Setup Required
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              To use Twitter authentication, you need to configure it in Supabase:
-            </Typography>
-            <Typography variant="body2" component="div" sx={{ fontSize: '0.875rem' }}>
-              1. Go to <a href="https://supabase.com/dashboard" target="_blank" style={{ color: '#1976d2' }}>Supabase Dashboard</a><br/>
-              2. Select your project (zobztnjzwsgtyjhceysw)<br/>
-              3. Go to Authentication → Providers<br/>
-              4. Enable Twitter provider<br/>
-              5. Add your Twitter app credentials<br/>
-              <br/>
-              <strong>Debug:</strong> Click the debug button below to test OAuth setup
-            </Typography>
-            <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-                              <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={async () => {
-                    try {
-                      console.log('🔍 Testing Twitter OAuth configuration...')
-                      const response = await fetch('/api/test-twitter-oauth')
-                      const data = await response.json()
 
-                      if (data.success) {
-                        setError(`✅ SUCCESS! Twitter OAuth is properly configured!\n\n${data.next_steps.join('\n')}`)
-                      } else {
-                        setError(`❌ Twitter OAuth Issue: ${data.error}\n\n${data.possible_causes ? 'Possible causes:\n' + data.possible_causes.join('\n') : 'Check your .env.local file and Twitter Developer Portal'}`)
-                      }
-                    } catch (err) {
-                      setError(`❌ Test failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
-                    }
-                  }}
-                >
-                  Test Twitter OAuth
-                </Button>
-            </Box>
-          </Alert>
-        )}
 
         {error && (
           <Alert
@@ -500,49 +550,75 @@ export default function Home() {
           </Alert>
         )}
 
-        {testResults && (
-          <Alert 
-            severity={testResults.success ? "success" : "error"} 
-            sx={{ mb: 2 }} 
-            onClose={() => setTestResults(null)}
-          >
-            <Typography variant="subtitle2">
-              {testResults.success ? '✅ Twitter Test Passed!' : '❌ Twitter Test Failed'}
-            </Typography>
-            {testResults.success ? (
-              <Typography variant="body2">
-                All Twitter integration tests passed successfully. You can now post drafts to Twitter.
-              </Typography>
-            ) : (
-              <Box>
-                <Typography variant="body2">
-                  {testResults.error}
-                </Typography>
-                {testResults.recommendation && (
-                  <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                    💡 {testResults.recommendation}
-                  </Typography>
-                )}
-              </Box>
-            )}
-          </Alert>
-        )}
+
 
         {/* Recording Controls */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          alignItems: 'center',
+          mb: 6,
+          p: 3,
+          borderRadius: 2,
+          bgcolor: 'background.paper',
+          boxShadow: 1
+        }}>
           <Fab
             color={isRecording ? "secondary" : "primary"}
             size="large"
-            onClick={isRecording ? stopRecording : startRecording}
+            onMouseDown={handleMicPressStart}
+            onMouseUp={handleMicPressEnd}
+            onMouseLeave={handleMicPressEnd}
+            onTouchStart={handleMicPressStart}
+            onTouchEnd={handleMicPressEnd}
+            onTouchCancel={handleMicPressEnd}
             disabled={loading}
+            sx={{ 
+              mb: 2,
+              transform: isRecording ? 'scale(1.1)' : 'scale(1)',
+              transition: 'transform 0.2s ease-in-out',
+              boxShadow: isRecording ? 4 : 2,
+              userSelect: 'none', // Prevent text selection on press-and-hold
+              WebkitTouchCallout: 'none', // Disable iOS callout
+              WebkitUserSelect: 'none',
+              cursor: 'pointer',
+              // Make it more touch-friendly
+              minHeight: '64px',
+              minWidth: '64px',
+              // Prevent double-tap zoom on mobile
+              touchAction: 'manipulation'
+            }}
           >
             {isRecording ? <MicOff /> : <Mic />}
           </Fab>
-        </Box>
 
-        <Typography variant="body2" align="center" color="text.secondary" paragraph>
-          {isRecording ? 'Recording... Click to stop' : 'Click to start recording'}
-        </Typography>
+          <Typography 
+            variant="body1" 
+            align="center" 
+            color={isRecording ? "secondary.main" : "text.secondary"}
+            sx={{ mb: 1, fontWeight: isRecording ? 600 : 400 }}
+          >
+{isRecording ? '🔴 Recording... Tap or release to stop' : '🎤 Tap to record or hold for hands-free'}
+          </Typography>
+          
+          <Typography 
+            variant="body2" 
+            align="center" 
+            color="text.secondary"
+            sx={{ 
+              opacity: 0.7,
+              fontStyle: 'italic'
+            }}
+          >
+            💡 Desktop: Hold <kbd style={{
+              background: '#f5f5f5', 
+              padding: '2px 6px', 
+              borderRadius: '4px',
+              fontSize: '0.85em',
+              fontFamily: 'monospace'
+            }}>SPACEBAR</kbd> • Mobile: Tap or hold mic button
+          </Typography>
+        </Box>
 
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
@@ -552,44 +628,93 @@ export default function Home() {
 
         {/* Recordings List */}
         <Box sx={{ mt: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h5">Your Recordings</Typography>
-            <IconButton onClick={fetchRecordings}>
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            mb: 3,
+            p: 2,
+            borderRadius: 1,
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText'
+          }}>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              📚 Your Recordings ({recordings.length})
+            </Typography>
+            <IconButton 
+              onClick={fetchRecordings} 
+              disabled={loading}
+              sx={{ color: 'primary.contrastText' }}
+            >
               <Refresh />
             </IconButton>
           </Box>
 
           {recordings.map((recording) => (
-            <Card key={recording.id} sx={{ mb: 2 }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    {new Date(recording.created_at).toLocaleString()}
+            <Card 
+              key={recording.id} 
+              sx={{ 
+                mb: 3, 
+                borderRadius: 2,
+                boxShadow: 2,
+                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: 4
+                }
+              }}
+            >
+              <CardContent sx={{ pb: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    📅 {new Date(recording.created_at).toLocaleString()}
                   </Typography>
                   <Chip
-                    label={recording.status}
+                    label={recording.status.toUpperCase()}
                     color={getStatusColor(recording.status)}
                     size="small"
+                    sx={{ fontWeight: 600 }}
                   />
                 </Box>
 
                 {recording.transcripts && recording.transcripts[0] && (
-                  <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic' }}>
-                    "{recording.transcripts[0].text.slice(0, 150)}..."
-                  </Typography>
+                  <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1, borderLeft: 3, borderColor: 'info.main' }}>
+                    <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, fontWeight: 600, color: 'info.main' }}>
+                      🎙️ TRANSCRIPT
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontStyle: 'italic', lineHeight: 1.5 }}>
+                      "{recording.transcripts[0].text.slice(0, 200)}{recording.transcripts[0].text.length > 200 ? '...' : ''}"
+                    </Typography>
+                  </Box>
                 )}
 
                 {recording.drafts && recording.drafts[0] && (
                   <Box sx={{ mt: 2 }}>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      AI Draft ({recording.drafts[0].mode}):
+                    <Typography variant="subtitle2" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}>
+                      🤖 AI Draft ({recording.drafts[0].mode.toUpperCase()})
                     </Typography>
                     {recording.drafts[0].thread.map((tweet, index) => (
-                      <Box key={index} sx={{ mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Typography variant="body2">{tweet.text}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {tweet.char_count}/280 characters
+                      <Box key={index} sx={{ 
+                        mb: 2, 
+                        p: 2, 
+                        bgcolor: 'primary.50', 
+                        borderRadius: 2,
+                        border: 1,
+                        borderColor: 'primary.200',
+                        position: 'relative'
+                      }}>
+                        {recording.drafts && recording.drafts[0] && recording.drafts[0].thread.length > 1 && (
+                          <Chip 
+                            label={`${index + 1}/${recording.drafts[0].thread.length}`}
+                            size="small"
+                            sx={{ position: 'absolute', top: 8, right: 8, fontSize: '0.7rem' }}
+                          />
+                        )}
+                        <Typography variant="body2" sx={{ pr: (recording.drafts && recording.drafts[0] && recording.drafts[0].thread.length > 1) ? 6 : 0, lineHeight: 1.5 }}>
+                          {tweet.text}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                          📊 {tweet.char_count}/280 characters
                         </Typography>
                       </Box>
                     ))}
@@ -634,9 +759,24 @@ export default function Home() {
           ))}
 
           {recordings.length === 0 && (
-            <Typography variant="body2" color="text.secondary" align="center">
-              No recordings yet. Start by recording your first voice note!
-            </Typography>
+            <Box sx={{ 
+              textAlign: 'center', 
+              py: 6, 
+              px: 3,
+              borderRadius: 2,
+              bgcolor: 'grey.50',
+              border: 2,
+              borderStyle: 'dashed',
+              borderColor: 'grey.300'
+            }}>
+              <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                🎤 No recordings yet
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Start by recording your first voice note! <br />
+                Click the microphone button or hold <strong>SPACEBAR</strong> to begin.
+              </Typography>
+            </Box>
           )}
         </Box>
       </Box>
