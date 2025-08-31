@@ -52,7 +52,7 @@ interface Draft {
 }
 
 export default function Home() {
-  const { user, isTwitterConnected, signInWithTwitter, loading: authLoading } = useAuth()
+  const { user, isTwitterConnected, signInWithTwitter, signOut, loading: authLoading } = useAuth()
   const [isRecording, setIsRecording] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
   const [recordings, setRecordings] = useState<Recording[]>([])
