@@ -2,14 +2,22 @@
 
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
-import { AppBar, Toolbar, Typography, Button, Box, Avatar } from '@mui/material'
+import { AppBar, Toolbar, Typography, Button, Box, Avatar, Switch, FormControlLabel, Tooltip } from '@mui/material'
 import { useState, useEffect } from 'react'
-import { Twitter, Logout } from '@mui/icons-material'
+import { Twitter, Logout, FlashOn, FlashOff } from '@mui/icons-material'
 import theme from '@/lib/theme'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
+import { SettingsProvider, useSettings } from '@/contexts/SettingsContext'
 
 function Navigation() {
-  const { user, signInWithTwitter, signOut, loading, isTwitterConnected } = useAuth()
+  const { user, signInWithTwitter, signOut, loading } = useAuth()
+  const { settings, updateSetting } = useSettings()
+  const [isTwitterConnected, setIsTwitterConnected] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleTwitterLogin = async () => {
     try {
@@ -27,6 +35,59 @@ function Navigation() {
     }
   }
 
+  // Check Twitter connection status
+  useEffect(() => {
+    if (!mounted) return
+
+    const checkTwitterConnection = async () => {
+      // Check localStorage first
+      const localConnected = localStorage.getItem('twitter_connected') === 'true'
+      
+      if (localConnected) {
+        setIsTwitterConnected(true)
+      } else {
+        setIsTwitterConnected(false)
+      }
+
+      // Also check server-side status
+      try {
+        const response = await fetch('/api/check-twitter-status')
+        const data = await response.json()
+        
+        if (data.success && data.summary.has_usable_account) {
+          setIsTwitterConnected(true)
+          localStorage.setItem('twitter_connected', 'true')
+        } else {
+          setIsTwitterConnected(false)
+          localStorage.removeItem('twitter_connected')
+        }
+      } catch (error) {
+        console.error('Failed to check Twitter status:', error)
+        // If server check fails, fall back to localStorage
+      }
+    }
+
+    checkTwitterConnection()
+  }, [user, mounted])
+
+  // Don't render until mounted to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <AppBar position="static" elevation={1}>
+        <Toolbar>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            Voice to Twitter
+          </Typography>
+          <Button color="inherit" disabled size="small">
+            Loading...
+          </Button>
+        </Toolbar>
+      </AppBar>
+    )
+  }
+
+
+
   return (
     <AppBar position="static" elevation={1}>
       <Toolbar>
@@ -35,6 +96,35 @@ function Navigation() {
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {isTwitterConnected && (
+            <Tooltip title={settings.autoPost ? "Auto-post enabled - tweets will post automatically after AI refinement" : "Auto-post disabled - manual posting required"}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.autoPost}
+                    onChange={(e) => updateSetting('autoPost', e.target.checked)}
+                    color="secondary"
+                    size="small"
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {settings.autoPost ? <FlashOn fontSize="small" /> : <FlashOff fontSize="small" />}
+                    <Typography variant="body2" sx={{ color: 'inherit' }}>
+                      Auto-post
+                    </Typography>
+                  </Box>
+                }
+                sx={{ 
+                  margin: 0,
+                  '& .MuiFormControlLabel-label': {
+                    color: settings.autoPost ? 'secondary.main' : 'text.secondary'
+                  }
+                }}
+              />
+            </Tooltip>
+          )}
+          
           {user ? (
             <>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -96,10 +186,12 @@ export default function ClientWrapper({
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <Navigation />
-        <main>
-          {children}
-        </main>
+        <SettingsProvider>
+          <Navigation />
+          <main>
+            {children}
+          </main>
+        </SettingsProvider>
       </AuthProvider>
     </ThemeProvider>
   )

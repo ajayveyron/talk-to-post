@@ -32,8 +32,10 @@ import {
   Delete,
   Refresh,
   CheckCircle,
+  FlashOn,
 } from '@mui/icons-material'
 import { useAuth } from '@/contexts/AuthContext'
+import { useSettings } from '@/contexts/SettingsContext'
 
 interface Recording {
   id: string
@@ -53,6 +55,7 @@ interface Draft {
 
 export default function Home() {
   const { user, isTwitterConnected, signInWithTwitter, signOut, loading: authLoading } = useAuth()
+  const { settings } = useSettings()
   const [isRecording, setIsRecording] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
   const [recordings, setRecordings] = useState<Recording[]>([])
@@ -398,6 +401,10 @@ export default function Home() {
       // Trigger processing
       const ingestResponse = await fetch(`/api/recordings/${recording_id}/ingest`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ autoPost: settings.autoPost }),
       })
       
       if (!ingestResponse.ok) {
@@ -785,13 +792,22 @@ export default function Home() {
                 )}
 
                 {recording.posts && recording.posts[0] && (
-                  <Box sx={{ mt: 1 }}>
+                  <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     <Chip
                       icon={<Twitter />}
                       label={`Posted ${recording.posts[0].twitter_tweet_ids?.length || 0} tweet(s)`}
                       color="primary"
                       size="small"
                     />
+                    {settings.autoPost && (
+                      <Chip
+                        icon={<FlashOn />}
+                        label="Auto-posted"
+                        color="success"
+                        variant="outlined"
+                        size="small"
+                      />
+                    )}
                   </Box>
                 )}
               </CardContent>
@@ -806,15 +822,26 @@ export default function Home() {
                     >
                       Edit
                     </Button>
-                    <Button
-                      size="small"
-                      startIcon={<Send />}
-                      variant="contained"
-                      onClick={() => handlePostDraft(recording.drafts![0].id)}
-                      disabled={loading}
-                    >
-                      Post to Twitter
-                    </Button>
+                    {!settings.autoPost && (
+                      <Button
+                        size="small"
+                        startIcon={<Send />}
+                        variant="contained"
+                        onClick={() => handlePostDraft(recording.drafts![0].id)}
+                        disabled={loading}
+                      >
+                        Post to Twitter
+                      </Button>
+                    )}
+                    {settings.autoPost && (
+                      <Chip
+                        icon={<FlashOn />}
+                        label="Auto-post enabled"
+                        color="success"
+                        size="small"
+                        sx={{ ml: 1 }}
+                      />
+                    )}
                   </>
                 )}
               </CardActions>

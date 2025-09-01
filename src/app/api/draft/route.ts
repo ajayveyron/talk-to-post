@@ -4,7 +4,7 @@ import { getSystemPrompt, getAIConfig } from '@/config'
 
 export async function POST(request: NextRequest) {
   try {
-    const { recording_id } = await request.json()
+    const { recording_id, autoPost } = await request.json()
 
     if (!recording_id) {
       return NextResponse.json(
@@ -38,6 +38,12 @@ export async function POST(request: NextRequest) {
 TRANSCRIPT:
 ${transcript.text}`
 
+    console.log('Sending to OpenRouter:', {
+      model: getAIConfig().model.name,
+      prompt_length: draftingPrompt.length,
+      transcript_text: transcript.text,
+    })
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -56,6 +62,9 @@ ${transcript.text}`
         ],
         temperature: getAIConfig().model.temperature,
         max_tokens: getAIConfig().model.maxTokens,
+        reasoning: {
+          effort: "minimal"
+        }
       }),
     })
 
@@ -69,11 +78,14 @@ ${transcript.text}`
     }
 
     const data = await response.json()
+    console.log('OpenRouter API response:', JSON.stringify(data, null, 2))
+    
     const content = data.choices[0]?.message?.content
 
     if (!content) {
+      console.error('No content in OpenRouter response:', data)
       return NextResponse.json(
-        { error: 'No content generated' },
+        { error: 'No content generated', details: data },
         { status: 500 }
       )
     }
@@ -129,11 +141,38 @@ ${transcript.text}`
       console.error('Status update error:', updateError)
     }
 
+    // If autoPost is enabled, automatically post to Twitter
+    if (autoPost) {
+      console.log('Auto-posting enabled, triggering automatic post...')
+      try {
+        // Construct base URL for API calls
+        const baseUrl = process.env.NODE_ENV === 'production'
+          ? 'https://talk-to-post.vercel.app'
+          : 'http://localhost:3000'
+        
+        const postResponse = await fetch(`${baseUrl}/api/post`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ draft_id: draft.id }),
+        })
+
+        if (postResponse.ok) {
+          console.log('✅ Auto-post successful')
+        } else {
+          const errorText = await postResponse.text()
+          console.error('❌ Auto-post failed:', postResponse.status, errorText)
+        }
+      } catch (postError) {
+        console.error('❌ Auto-post error:', postError)
+      }
+    }
+
     return NextResponse.json({
       draft_id: draft.id,
       mode: draft.mode,
       tweets: draft.thread,
       original_text: transcript.text,
+      autoPosted: autoPost || false,
     })
   } catch (error) {
     console.error('Draft generation error:', error)

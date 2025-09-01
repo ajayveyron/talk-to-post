@@ -3,12 +3,31 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const recordingId = params.id
+    const { id } = await params
+    const recordingId = id
+    
+    let body = {}
+    let autoPost = false
+    
+    try {
+      body = await request.json()
+      autoPost = body.autoPost || false
+    } catch (e) {
+      // If no JSON body, that's fine - autoPost defaults to false
+      console.log('No JSON body in request, using defaults')
+    }
 
     // Verify recording exists and belongs to user
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Database unavailable' },
+        { status: 500 }
+      )
+    }
+
     const { data: recording, error: recordingError } = await supabaseAdmin
       .from('recordings')
       .select('*')
@@ -23,7 +42,7 @@ export async function POST(
     }
 
     // Update status to transcribing
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin!
       .from('recordings')
       .update({ status: 'transcribing' })
       .eq('id', recordingId)
@@ -39,11 +58,11 @@ export async function POST(
     // TODO: Add to BullMQ queue for background processing
     // For now, we'll trigger transcription directly
     try {
-      await processRecording(recordingId, request)
+      await processRecording(recordingId, request, autoPost)
     } catch (error) {
       console.error('Processing error:', error)
       // Update status to failed
-      await supabaseAdmin
+      await supabaseAdmin!
         .from('recordings')
         .update({ status: 'failed' })
         .eq('id', recordingId)
@@ -67,7 +86,7 @@ export async function POST(
   }
 }
 
-async function processRecording(recordingId: string, request?: NextRequest) {
+async function processRecording(recordingId: string, request?: NextRequest, autoPost: boolean = false) {
   // This function will be moved to a background job
   // For now, we'll call the transcription and drafting APIs directly
   
@@ -101,7 +120,7 @@ async function processRecording(recordingId: string, request?: NextRequest) {
   const draftResponse = await fetch(draftUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ recording_id: recordingId }),
+    body: JSON.stringify({ recording_id: recordingId, autoPost }),
   })
 
   if (!draftResponse.ok) {
@@ -111,7 +130,7 @@ async function processRecording(recordingId: string, request?: NextRequest) {
   }
 
   // Update status to ready
-  await supabaseAdmin
+  await supabaseAdmin!
     .from('recordings')
     .update({ status: 'ready' })
     .eq('id', recordingId)
