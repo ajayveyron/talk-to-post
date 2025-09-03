@@ -33,9 +33,13 @@ import {
   Refresh,
   CheckCircle,
   FlashOn,
+  AttachFile,
+  Image,
+  Close,
 } from '@mui/icons-material'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSettings } from '@/contexts/SettingsContext'
+import { validateAttachmentFile, formatFileSize } from '@/utils/fileValidation'
 
 interface Recording {
   id: string
@@ -46,11 +50,21 @@ interface Recording {
   posts?: { twitter_tweet_ids: string[], posted_at: string }[]
 }
 
+interface Attachment {
+  id: string
+  filename: string
+  file_size: number
+  mime_type: string
+  media_type: 'image' | 'video' | 'gif'
+  storage_key: string
+}
+
 interface Draft {
   id: string
   mode: 'tweet' | 'thread'
   thread: { text: string; char_count: number }[]
   original_text?: string
+  attachments?: Attachment[]
 }
 
 export default function Home() {
@@ -67,6 +81,7 @@ export default function Home() {
   const [spacebarPressed, setSpacebarPressed] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
   const [requestingPermission, setRequestingPermission] = useState(false)
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
 
     useEffect(() => {
     fetchRecordings()
@@ -474,6 +489,66 @@ export default function Home() {
     setEditingDraft(null)
   }
 
+  const handleAttachmentUpload = async (file: File, draftId: string) => {
+    try {
+      setUploadingAttachment(true)
+      setError(null)
+
+      // Validate file
+      const validation = validateAttachmentFile(file)
+      if (!validation.isValid) {
+        throw new Error(validation.error)
+      }
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('draftId', draftId)
+
+      const response = await fetch('/api/attachments', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to upload attachment')
+      }
+
+      console.log('Attachment uploaded successfully:', result)
+      
+      // Refresh recordings to show the new attachment
+      fetchRecordings()
+      
+      return result
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to upload attachment'
+      setError(`Upload failed: ${errorMessage}`)
+      throw err
+    } finally {
+      setUploadingAttachment(false)
+    }
+  }
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    try {
+      const response = await fetch(`/api/attachments?id=${attachmentId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to delete attachment')
+      }
+
+      // Refresh recordings to remove the deleted attachment
+      fetchRecordings()
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete attachment'
+      setError(`Delete failed: ${errorMessage}`)
+    }
+  }
+
   const handlePostDraft = async (draftId: string) => {
     if (!twitterConnected) {
       setError('Please connect your Twitter account first')
@@ -763,6 +838,28 @@ export default function Home() {
                     <Typography variant="subtitle2" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600 }}>
                       🤖 AI Draft ({recording.drafts[0].mode.toUpperCase()})
                     </Typography>
+                    
+                    {/* Attachments Preview */}
+                    {recording.drafts[0].attachments && recording.drafts[0].attachments.length > 0 && (
+                      <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.100', borderRadius: 2, border: 1, borderColor: 'grey.300' }}>
+                        <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, fontWeight: 600, color: 'text.secondary' }}>
+                          📎 ATTACHMENTS ({recording.drafts[0].attachments.length})
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                          {recording.drafts[0].attachments.map((attachment) => (
+                            <Chip
+                              key={attachment.id}
+                              icon={attachment.media_type === 'video' ? <PlayArrow /> : <Image />}
+                              label={`${attachment.filename} (${formatFileSize(attachment.file_size)})`}
+                              size="small"
+                              variant="outlined"
+                              sx={{ maxWidth: '200px' }}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+
                     {recording.drafts[0].thread.map((tweet, index) => (
                       <Box key={index} sx={{ 
                         mb: 2, 
@@ -822,6 +919,30 @@ export default function Home() {
                     >
                       Edit
                     </Button>
+                    <input
+                      accept="image/*,video/mp4,video/mov"
+                      style={{ display: 'none' }}
+                      id={`attachment-upload-${recording.drafts[0].id}`}
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file && recording.drafts?.[0]) {
+                          handleAttachmentUpload(file, recording.drafts[0].id)
+                        }
+                        // Reset input value so same file can be uploaded again
+                        e.target.value = ''
+                      }}
+                    />
+                    <label htmlFor={`attachment-upload-${recording.drafts[0].id}`}>
+                      <Button
+                        component="span"
+                        size="small"
+                        startIcon={<AttachFile />}
+                        disabled={uploadingAttachment || loading}
+                      >
+                        {uploadingAttachment ? 'Uploading...' : 'Attach'}
+                      </Button>
+                    </label>
                     {!settings.autoPost && (
                       <Button
                         size="small"
@@ -831,6 +952,9 @@ export default function Home() {
                         disabled={loading}
                       >
                         Post to Twitter
+                        {recording.drafts[0].attachments && recording.drafts[0].attachments.length > 0 && (
+                          ` (+${recording.drafts[0].attachments.length})`
+                        )}
                       </Button>
                     )}
                     {settings.autoPost && (
@@ -875,6 +999,76 @@ export default function Home() {
       <Dialog open={!!editingDraft} onClose={() => setEditingDraft(null)} maxWidth="md" fullWidth>
         <DialogTitle>Edit Draft</DialogTitle>
         <DialogContent>
+          {/* Attachments Section */}
+          {editingDraft && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                📎 Attachments
+              </Typography>
+              
+              {/* Existing Attachments */}
+              {editingDraft.attachments && editingDraft.attachments.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  {editingDraft.attachments.map((attachment) => (
+                    <Box key={attachment.id} sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 2, 
+                      p: 2, 
+                      border: 1, 
+                      borderColor: 'grey.300', 
+                      borderRadius: 1, 
+                      mb: 1 
+                    }}>
+                      {attachment.media_type === 'video' ? <PlayArrow /> : <Image />}
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2">{attachment.filename}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatFileSize(attachment.file_size)} • {attachment.media_type}
+                        </Typography>
+                      </Box>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteAttachment(attachment.id)}
+                        color="error"
+                      >
+                        <Close />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+              
+              {/* Add Attachment Button */}
+              <input
+                accept="image/*,video/mp4,video/mov"
+                style={{ display: 'none' }}
+                id="edit-attachment-upload"
+                type="file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file && editingDraft) {
+                    handleAttachmentUpload(file, editingDraft.id)
+                  }
+                  // Reset input value
+                  e.target.value = ''
+                }}
+              />
+              <label htmlFor="edit-attachment-upload">
+                <Button
+                  component="span"
+                  startIcon={<AttachFile />}
+                  variant="outlined"
+                  disabled={uploadingAttachment}
+                  sx={{ mb: 2 }}
+                >
+                  {uploadingAttachment ? 'Uploading...' : 'Add Attachment'}
+                </Button>
+              </label>
+            </Box>
+          )}
+
+          {/* Tweet Editing */}
           {editedTweets.map((tweet, index) => (
             <Box key={index} sx={{ mb: 2 }}>
               <TextField
