@@ -33,6 +33,7 @@ import {
   Refresh,
   CheckCircle,
   FlashOn,
+  Add,
 } from '@mui/icons-material'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSettings } from '@/contexts/SettingsContext'
@@ -431,6 +432,74 @@ export default function Home() {
     setEditedTweets(updated)
   }
 
+  const handleJoinTweets = async (index: number, recordingId: string, draftId: string, isEditDialog: boolean = false) => {
+    const tweetsToUpdate = isEditDialog ? editedTweets : recordings.find(r => r.id === recordingId)?.drafts?.[0]?.thread || []
+    
+    if (index >= tweetsToUpdate.length - 1) return
+    
+    const firstTweet = tweetsToUpdate[index]
+    const secondTweet = tweetsToUpdate[index + 1]
+    const joinedText = `${firstTweet.text} ${secondTweet.text}`.trim()
+    const joinedCharCount = joinedText.length
+    
+    let finalText = joinedText
+    
+    // If exceeds character limit, invoke AI to rewrite
+    if (joinedCharCount > 280) {
+      try {
+        setLoading(true)
+        const response = await fetch('/api/rewrite-tweet', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            text: joinedText,
+            maxLength: 280 
+          }),
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          finalText = result.rewrittenText || joinedText
+        } else {
+          console.error('Failed to rewrite tweet:', await response.text())
+          // Use original joined text even if it exceeds limit
+        }
+      } catch (error) {
+        console.error('Error rewriting tweet:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    // Create new array with joined tweet and remove the second tweet
+    const updated = [...tweetsToUpdate]
+    updated[index] = { text: finalText, char_count: finalText.length }
+    updated.splice(index + 1, 1) // Remove the second tweet
+    
+    if (isEditDialog) {
+      setEditedTweets(updated)
+    } else {
+      // Update the recordings state directly
+      setRecordings(prevRecordings => 
+        prevRecordings.map(recording => {
+          if (recording.id === recordingId && recording.drafts) {
+            return {
+              ...recording,
+              drafts: recording.drafts.map(draft => 
+                draft.id === draftId 
+                  ? { ...draft, thread: updated }
+                  : draft
+              )
+            }
+          }
+          return recording
+        })
+      )
+    }
+  }
+
   const handleTwitterLogin = async () => {
     console.log('Twitter login button clicked - starting direct OAuth flow')
 
@@ -764,28 +833,54 @@ export default function Home() {
                       🤖 AI Draft ({recording.drafts[0].mode.toUpperCase()})
                     </Typography>
                     {recording.drafts[0].thread.map((tweet, index) => (
-                      <Box key={index} sx={{ 
-                        mb: 2, 
-                        p: 2, 
-                        bgcolor: 'primary.50', 
-                        borderRadius: 2,
-                        border: 1,
-                        borderColor: 'primary.200',
-                        position: 'relative'
-                      }}>
-                        {recording.drafts && recording.drafts[0] && recording.drafts[0].thread.length > 1 && (
-                          <Chip 
-                            label={`${index + 1}/${recording.drafts[0].thread.length}`}
-                            size="small"
-                            sx={{ position: 'absolute', top: 8, right: 8, fontSize: '0.7rem' }}
-                          />
+                      <Box key={index}>
+                        <Box sx={{ 
+                          mb: index < recording.drafts![0].thread.length - 1 ? 1 : 2, 
+                          p: 2, 
+                          bgcolor: 'primary.50', 
+                          borderRadius: 2,
+                          border: 1,
+                          borderColor: 'primary.200',
+                          position: 'relative'
+                        }}>
+                          {recording.drafts && recording.drafts[0] && recording.drafts[0].thread.length > 1 && (
+                            <Chip 
+                              label={`${index + 1}/${recording.drafts[0].thread.length}`}
+                              size="small"
+                              sx={{ position: 'absolute', top: 8, right: 8, fontSize: '0.7rem' }}
+                            />
+                          )}
+                          <Typography variant="body2" sx={{ pr: (recording.drafts && recording.drafts[0] && recording.drafts[0].thread.length > 1) ? 6 : 0, lineHeight: 1.5 }}>
+                            {tweet.text}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                            📊 {tweet.char_count}/280 characters
+                          </Typography>
+                        </Box>
+                        
+                        {/* Plus icon between tweets */}
+                        {index < recording.drafts![0].thread.length - 1 && (
+                          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleJoinTweets(index, recording.id, recording.drafts![0].id, false)}
+                              sx={{ 
+                                bgcolor: 'background.paper',
+                                border: 1,
+                                borderColor: 'primary.main',
+                                '&:hover': {
+                                  bgcolor: 'primary.50',
+                                  transform: 'scale(1.1)'
+                                },
+                                transition: 'all 0.2s ease-in-out'
+                              }}
+                              title="Join with next tweet"
+                            >
+                              <Add fontSize="small" />
+                            </IconButton>
+                          </Box>
                         )}
-                        <Typography variant="body2" sx={{ pr: (recording.drafts && recording.drafts[0] && recording.drafts[0].thread.length > 1) ? 6 : 0, lineHeight: 1.5 }}>
-                          {tweet.text}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                          📊 {tweet.char_count}/280 characters
-                        </Typography>
                       </Box>
                     ))}
                   </Box>
@@ -876,17 +971,43 @@ export default function Home() {
         <DialogTitle>Edit Draft</DialogTitle>
         <DialogContent>
           {editedTweets.map((tweet, index) => (
-            <Box key={index} sx={{ mb: 2 }}>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                label={`Tweet ${index + 1}`}
-                value={tweet.text}
-                onChange={(e) => handleUpdateTweet(index, e.target.value)}
-                helperText={`${tweet.char_count}/280 characters`}
-                error={tweet.char_count > 280}
-              />
+            <Box key={index}>
+              <Box sx={{ mb: index < editedTweets.length - 1 ? 1 : 2 }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  label={`Tweet ${index + 1}`}
+                  value={tweet.text}
+                  onChange={(e) => handleUpdateTweet(index, e.target.value)}
+                  helperText={`${tweet.char_count}/280 characters`}
+                  error={tweet.char_count > 280}
+                />
+              </Box>
+              
+              {/* Plus icon between tweets in edit dialog */}
+              {index < editedTweets.length - 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => handleJoinTweets(index, '', '', true)}
+                    sx={{ 
+                      bgcolor: 'background.paper',
+                      border: 1,
+                      borderColor: 'primary.main',
+                      '&:hover': {
+                        bgcolor: 'primary.50',
+                        transform: 'scale(1.1)'
+                      },
+                      transition: 'all 0.2s ease-in-out'
+                    }}
+                    title="Join with next tweet"
+                  >
+                    <Add fontSize="small" />
+                  </IconButton>
+                </Box>
+              )}
             </Box>
           ))}
         </DialogContent>
