@@ -125,7 +125,7 @@ function Navigation() {
             </Tooltip>
           )}
           
-          {user ? (
+          {user && isTwitterConnected ? (
             <>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 {user.user_metadata?.avatar_url && (
@@ -137,9 +137,7 @@ function Navigation() {
                 <Typography variant="body2">
                   {user.user_metadata?.full_name || user.user_metadata?.user_name || 'User'}
                 </Typography>
-                {isTwitterConnected && (
-                  <Twitter color="primary" fontSize="small" />
-                )}
+                <Twitter color="primary" fontSize="small" />
               </Box>
               <Button
                 color="inherit"
