@@ -69,7 +69,10 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         transcripts (*),
-        drafts (*),
+        drafts (
+          *,
+          attachments (*)
+        ),
         posts (*)
       `)
       .eq('user_id', userId)

@@ -193,8 +193,45 @@ CREATE TRIGGER update_recordings_updated_at BEFORE UPDATE ON recordings
 CREATE TRIGGER update_drafts_updated_at BEFORE UPDATE ON drafts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Create attachments table for media files
+CREATE TABLE attachments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  draft_id UUID REFERENCES drafts(id) ON DELETE CASCADE,
+  storage_key TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  file_size BIGINT,
+  mime_type TEXT NOT NULL,
+  media_type TEXT CHECK (media_type IN ('image', 'video', 'gif')) NOT NULL,
+  twitter_media_id TEXT, -- Stored after uploading to Twitter
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create index for attachments
+CREATE INDEX idx_attachments_user_id ON attachments(user_id);
+CREATE INDEX idx_attachments_draft_id ON attachments(draft_id);
+
+-- Enable RLS for attachments
+ALTER TABLE attachments ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policies for attachments
+CREATE POLICY "Users can view own attachments" ON attachments
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own attachments" ON attachments
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own attachments" ON attachments
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own attachments" ON attachments
+  FOR DELETE USING (auth.uid() = user_id);
+
 -- Create storage bucket for audio files
 INSERT INTO storage.buckets (id, name, public) VALUES ('audio-recordings', 'audio-recordings', false);
+
+-- Create storage bucket for attachments
+INSERT INTO storage.buckets (id, name, public) VALUES ('attachments', 'attachments', false);
 
 -- Create storage policy for audio recordings
 CREATE POLICY "Users can upload own audio files" ON storage.objects
@@ -212,5 +249,24 @@ CREATE POLICY "Users can view own audio files" ON storage.objects
 CREATE POLICY "Users can delete own audio files" ON storage.objects
   FOR DELETE USING (
     bucket_id = 'audio-recordings' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- Create storage policies for attachments
+CREATE POLICY "Users can upload own attachments" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'attachments' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Users can view own attachments" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'attachments' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Users can delete own attachments" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'attachments' AND
     auth.uid()::text = (storage.foldername(name))[1]
   );

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get draft details
+    // Get draft details with attachments
     console.log('Fetching draft details...')
     const { data: draft, error: draftError } = await supabaseAdmin
       .from('drafts')
@@ -27,6 +27,14 @@ export async function POST(request: NextRequest) {
         *,
         recordings (
           user_id
+        ),
+        attachments (
+          id,
+          storage_key,
+          filename,
+          mime_type,
+          media_type,
+          file_size
         )
       `)
       .eq('id', draft_id)
@@ -101,6 +109,14 @@ export async function POST(request: NextRequest) {
     console.log('Initializing Twitter client with access token...')
     const twitterClient = new TwitterApi(accessToken)
 
+    // Upload media to Twitter if attachments exist
+    let mediaIds: string[] = []
+    if (draft.attachments && draft.attachments.length > 0) {
+      console.log('Uploading media to Twitter...')
+      mediaIds = await uploadMediaToTwitter(twitterClient, draft.attachments)
+      console.log('Media uploaded successfully, media IDs:', mediaIds)
+    }
+
     // Post tweets
     console.log('Posting thread:', draft.thread)
     
@@ -113,7 +129,7 @@ export async function POST(request: NextRequest) {
       tweetIds = draft.thread.map((_: any, index: number) => `mock-tweet-${Date.now()}-${index}`)
       console.log('Mock tweet IDs:', tweetIds)
     } else {
-      tweetIds = await postThread(twitterClient, draft.thread)
+      tweetIds = await postThread(twitterClient, draft.thread, mediaIds)
       console.log('Thread posted successfully, tweet IDs:', tweetIds)
     }
 
@@ -183,16 +199,22 @@ export async function POST(request: NextRequest) {
 
 async function postThread(
   client: TwitterApi,
-  tweets: { text: string; char_count: number }[]
+  tweets: { text: string; char_count: number }[],
+  mediaIds: string[] = []
 ): Promise<string[]> {
   const tweetIds: string[] = []
   let replyToId: string | undefined
 
-  for (const tweet of tweets) {
+  for (const [index, tweet] of tweets.entries()) {
     try {
       const tweetOptions: any = {}
       if (replyToId) {
         tweetOptions.reply = { in_reply_to_tweet_id: replyToId }
+      }
+
+      // Add media to the first tweet only (Twitter limitation)
+      if (index === 0 && mediaIds.length > 0) {
+        tweetOptions.media = { media_ids: mediaIds }
       }
 
       const response = await client.v2.tweet(tweet.text, tweetOptions)
@@ -247,6 +269,53 @@ async function postThread(
   }
 
   return tweetIds
+}
+
+async function uploadMediaToTwitter(
+  client: TwitterApi,
+  attachments: any[]
+): Promise<string[]> {
+  const mediaIds: string[] = []
+
+  for (const attachment of attachments) {
+    try {
+      console.log(`Uploading media: ${attachment.filename}`)
+      
+      // Download file from Supabase Storage
+      const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+        .from('attachments')
+        .download(attachment.storage_key)
+
+      if (downloadError || !fileData) {
+        console.error('Failed to download attachment:', downloadError)
+        throw new Error(`Failed to download attachment: ${attachment.filename}`)
+      }
+
+      // Convert to buffer
+      const buffer = Buffer.from(await fileData.arrayBuffer())
+
+      // Upload to Twitter
+      const mediaUpload = await client.v1.uploadMedia(buffer, {
+        mimeType: attachment.mime_type,
+        target: 'tweet'
+      })
+
+      mediaIds.push(mediaUpload)
+      console.log(`Media uploaded successfully: ${attachment.filename} -> ${mediaUpload}`)
+
+      // Update attachment record with Twitter media ID
+      await supabaseAdmin
+        .from('attachments')
+        .update({ twitter_media_id: mediaUpload })
+        .eq('id', attachment.id)
+
+    } catch (error) {
+      console.error(`Failed to upload media ${attachment.filename}:`, error)
+      throw new Error(`Failed to upload media: ${attachment.filename}`)
+    }
+  }
+
+  return mediaIds
 }
 
 async function refreshTwitterToken(account: any): Promise<string> {
