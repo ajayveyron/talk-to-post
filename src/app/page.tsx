@@ -33,6 +33,7 @@ import {
   Refresh,
   CheckCircle,
   FlashOn,
+  ContentCopy,
 } from '@mui/icons-material'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSettings } from '@/contexts/SettingsContext'
@@ -67,6 +68,7 @@ export default function Home() {
   const [spacebarPressed, setSpacebarPressed] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
   const [requestingPermission, setRequestingPermission] = useState(false)
+  const [copySuccess, setCopySuccess] = useState<string | null>(null)
 
     useEffect(() => {
     fetchRecordings()
@@ -474,6 +476,18 @@ export default function Home() {
     setEditingDraft(null)
   }
 
+  const handleCopyTweet = async (text: string, tweetIndex: number) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopySuccess(`tweet-${tweetIndex}`)
+      // Clear success message after 2 seconds
+      setTimeout(() => setCopySuccess(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy text:', err)
+      setError('Failed to copy tweet to clipboard')
+    }
+  }
+
   const handlePostDraft = async (draftId: string) => {
     if (!twitterConnected) {
       setError('Please connect your Twitter account first')
@@ -783,9 +797,26 @@ export default function Home() {
                         <Typography variant="body2" sx={{ pr: (recording.drafts && recording.drafts[0] && recording.drafts[0].thread.length > 1) ? 6 : 0, lineHeight: 1.5 }}>
                           {tweet.text}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                          📊 {tweet.char_count}/280 characters
-                        </Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            📊 {tweet.char_count}/280 characters
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleCopyTweet(tweet.text, index)}
+                            sx={{ 
+                              ml: 1,
+                              color: copySuccess === `tweet-${index}` ? 'success.main' : 'text.secondary',
+                              '&:hover': {
+                                color: 'primary.main',
+                                backgroundColor: 'primary.50'
+                              }
+                            }}
+                            title="Copy tweet to clipboard"
+                          >
+                            <ContentCopy fontSize="small" />
+                          </IconButton>
+                        </Box>
                       </Box>
                     ))}
                   </Box>
@@ -877,16 +908,32 @@ export default function Home() {
         <DialogContent>
           {editedTweets.map((tweet, index) => (
             <Box key={index} sx={{ mb: 2 }}>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                label={`Tweet ${index + 1}`}
-                value={tweet.text}
-                onChange={(e) => handleUpdateTweet(index, e.target.value)}
-                helperText={`${tweet.char_count}/280 characters`}
-                error={tweet.char_count > 280}
-              />
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  label={`Tweet ${index + 1}`}
+                  value={tweet.text}
+                  onChange={(e) => handleUpdateTweet(index, e.target.value)}
+                  helperText={`${tweet.char_count}/280 characters`}
+                  error={tweet.char_count > 280}
+                />
+                <IconButton
+                  onClick={() => handleCopyTweet(tweet.text, index)}
+                  sx={{ 
+                    mt: 1,
+                    color: copySuccess === `tweet-${index}` ? 'success.main' : 'text.secondary',
+                    '&:hover': {
+                      color: 'primary.main',
+                      backgroundColor: 'primary.50'
+                    }
+                  }}
+                  title="Copy tweet to clipboard"
+                >
+                  <ContentCopy />
+                </IconButton>
+              </Box>
             </Box>
           ))}
         </DialogContent>
