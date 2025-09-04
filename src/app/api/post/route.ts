@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { TwitterApi } from 'twitter-api-v2'
 import { supabaseAdmin } from '@/lib/supabase'
 
+if (!supabaseAdmin) {
+  throw new Error('Supabase service role key is required for server operations')
+}
+
 interface TwitterError {
   code?: number
   message?: string
@@ -19,14 +23,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get draft details
+    // Get draft details with attachments
     console.log('Fetching draft details...')
-    const { data: draft, error: draftError } = await supabaseAdmin
+    const { data: draft, error: draftError } = await supabaseAdmin!
       .from('drafts')
       .select(`
         *,
         recordings (
           user_id
+        ),
+        attachments (
+          id,
+          storage_key,
+          filename,
+          mime_type,
+          media_type,
+          file_size
         )
       `)
       .eq('id', draft_id)
@@ -44,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     // Try to find ANY valid Twitter account first (since we might have multiple)
     console.log('Searching for ANY valid Twitter account...')
-    const { data: allAccounts, error: allAccountsError } = await supabaseAdmin
+    const { data: allAccounts, error: allAccountsError } = await supabaseAdmin!
       .from('accounts')
       .select('*')
       .eq('provider', 'twitter')
@@ -101,6 +113,14 @@ export async function POST(request: NextRequest) {
     console.log('Initializing Twitter client with access token...')
     const twitterClient = new TwitterApi(accessToken)
 
+    // Upload media to Twitter if attachments exist
+    let mediaIds: string[] = []
+    if (draft.attachments && draft.attachments.length > 0) {
+      console.log('Uploading media to Twitter...')
+      mediaIds = await uploadMediaToTwitter(draft.attachments)
+      console.log('Media uploaded successfully, media IDs:', mediaIds)
+    }
+
     // Post tweets
     console.log('Posting thread:', draft.thread)
     
@@ -113,12 +133,12 @@ export async function POST(request: NextRequest) {
       tweetIds = draft.thread.map((_: any, index: number) => `mock-tweet-${Date.now()}-${index}`)
       console.log('Mock tweet IDs:', tweetIds)
     } else {
-      tweetIds = await postThread(twitterClient, draft.thread)
+      tweetIds = await postThread(twitterClient, draft.thread, mediaIds)
       console.log('Thread posted successfully, tweet IDs:', tweetIds)
     }
 
     // Save post record
-    const { data: post, error: postError } = await supabaseAdmin
+    const { data: post, error: postError } = await supabaseAdmin!
       .from('posts')
       .insert({
         recording_id: draft.recording_id,
@@ -139,7 +159,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update recording status to posted
-    await supabaseAdmin
+    await supabaseAdmin!
       .from('recordings')
       .update({ status: 'posted' })
       .eq('id', draft.recording_id)
@@ -162,7 +182,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     if (body.draft_id) {
       // Save error in posts table
-      await supabaseAdmin
+      await supabaseAdmin!
         .from('posts')
         .insert({
           draft_id: body.draft_id,
@@ -183,16 +203,22 @@ export async function POST(request: NextRequest) {
 
 async function postThread(
   client: TwitterApi,
-  tweets: { text: string; char_count: number }[]
+  tweets: { text: string; char_count: number }[],
+  mediaIds: string[] = []
 ): Promise<string[]> {
   const tweetIds: string[] = []
   let replyToId: string | undefined
 
-  for (const tweet of tweets) {
+  for (const [index, tweet] of tweets.entries()) {
     try {
       const tweetOptions: any = {}
       if (replyToId) {
         tweetOptions.reply = { in_reply_to_tweet_id: replyToId }
+      }
+
+      // Add media to the first tweet only (Twitter limitation)
+      if (index === 0 && mediaIds.length > 0) {
+        tweetOptions.media = { media_ids: mediaIds }
       }
 
       const response = await client.v2.tweet(tweet.text, tweetOptions)
@@ -249,6 +275,66 @@ async function postThread(
   return tweetIds
 }
 
+async function uploadMediaToTwitter(
+  attachments: any[]
+): Promise<string[]> {
+  const mediaIds: string[] = []
+
+  // Create OAuth 1.0a client for media uploads (Twitter v1.1 API requires this)
+  const mediaClient = new TwitterApi({
+    appKey: process.env.TWITTER_API_KEY!,
+    appSecret: process.env.TWITTER_API_SECRET!,
+    accessToken: process.env.TWITTER_ACCESS_TOKEN!,
+    accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET!,
+  })
+
+  for (const attachment of attachments) {
+    try {
+      console.log(`Uploading media: ${attachment.filename}`)
+
+      // Download file from Supabase Storage
+      const { data: fileData, error: downloadError } = await supabaseAdmin!.storage
+        .from('attachments')
+        .download(attachment.storage_key)
+
+      if (downloadError || !fileData) {
+        console.error('Failed to download attachment:', downloadError)
+        throw new Error(`Failed to download attachment: ${attachment.filename}`)
+      }
+
+      // Convert to buffer
+      const buffer = Buffer.from(await fileData.arrayBuffer())
+
+      // Upload to Twitter using OAuth 1.0a
+      const mediaUpload = await mediaClient.v1.uploadMedia(buffer, {
+        mimeType: attachment.mime_type,
+        target: 'tweet'
+      })
+
+      mediaIds.push(mediaUpload)
+      console.log(`Media uploaded successfully: ${attachment.filename} -> ${mediaUpload}`)
+
+      // Update attachment record with Twitter media ID
+      await supabaseAdmin!
+        .from('attachments')
+        .update({ twitter_media_id: mediaUpload })
+        .eq('id', attachment.id)
+
+    } catch (error: any) {
+      console.error(`Failed to upload media ${attachment.filename}:`, error)
+      console.error('Media upload error details:', {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        data: error.data
+      })
+      throw new Error(`Failed to upload media: ${attachment.filename}`)
+    }
+  }
+
+  return mediaIds
+}
+
 async function refreshTwitterToken(account: any): Promise<string> {
   if (!account.refresh_token) {
     throw new Error('No refresh token available')
@@ -271,7 +357,7 @@ async function refreshTwitterToken(account: any): Promise<string> {
       ? new Date(Date.now() + expiresIn * 1000).toISOString()
       : null
 
-    await supabaseAdmin
+    await supabaseAdmin!
       .from('accounts')
       .update({
         access_token: accessToken,
