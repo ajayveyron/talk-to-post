@@ -89,74 +89,64 @@ function Navigation() {
 
 
   return (
-    <AppBar position="static" elevation={1}>
-      <Toolbar>
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+    <AppBar position="static" elevation={0}>
+      <Toolbar sx={{ minHeight: 64, px: 3 }}>
+        <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 500 }}>
           Voice to Twitter
         </Typography>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           {isTwitterConnected && (
-            <Tooltip title={settings.autoPost ? "Auto-post enabled - tweets will post automatically after AI refinement" : "Auto-post disabled - manual posting required"}>
+            <Tooltip title={settings.autoPost ? "Auto-post enabled" : "Auto-post disabled"}>
               <FormControlLabel
                 control={
                   <Switch
                     checked={settings.autoPost}
                     onChange={(e) => updateSetting('autoPost', e.target.checked)}
-                    color="secondary"
                     size="small"
                   />
                 }
                 label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    {settings.autoPost ? <FlashOn fontSize="small" /> : <FlashOff fontSize="small" />}
-                    <Typography variant="body2" sx={{ color: 'inherit' }}>
-                      Auto-post
-                    </Typography>
-                  </Box>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+                    Auto-post
+                  </Typography>
                 }
-                sx={{ 
-                  margin: 0,
-                  '& .MuiFormControlLabel-label': {
-                    color: settings.autoPost ? 'secondary.main' : 'text.secondary'
-                  }
-                }}
+                sx={{ margin: 0 }}
               />
             </Tooltip>
           )}
           
           {user && isTwitterConnected ? (
-            <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 {user.user_metadata?.avatar_url && (
                   <Avatar
                     src={user.user_metadata.avatar_url}
-                    sx={{ width: 32, height: 32 }}
+                    sx={{ width: 28, height: 28 }}
                   />
                 )}
-                <Typography variant="body2">
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   {user.user_metadata?.full_name || user.user_metadata?.user_name || 'User'}
                 </Typography>
-                <Twitter color="primary" fontSize="small" />
               </Box>
               <Button
-                color="inherit"
+                variant="text"
                 onClick={handleSignOut}
-                startIcon={<Logout />}
                 size="small"
+                sx={{ color: 'text.secondary', minWidth: 'auto', px: 1 }}
               >
-                Sign Out
+                Sign out
               </Button>
-            </>
+            </Box>
           ) : (
             <Button
-              color="inherit"
+              variant="contained"
               onClick={handleTwitterLogin}
-              startIcon={<Twitter />}
               disabled={loading}
               size="small"
+              sx={{ minWidth: 140 }}
             >
-              Sign in with Twitter
+              {loading ? 'Connecting...' : 'Connect Twitter'}
             </Button>
           )}
         </Box>

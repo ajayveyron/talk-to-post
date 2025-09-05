@@ -73,10 +73,9 @@ export default function SettingsPage() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          <SettingsIcon sx={{ mr: 2, verticalAlign: "middle" }} />
+    <Container maxWidth="md" sx={{ py: 6 }}>
+      <Box sx={{ mb: 6 }}>
+        <Typography variant="h2" component="h1" gutterBottom sx={{ fontWeight: 300 }}>
           Settings
         </Typography>
         <Typography variant="body1" color="text.secondary">
@@ -85,25 +84,21 @@ export default function SettingsPage() {
       </Box>
 
       {saved && (
-        <Alert severity="success" sx={{ mb: 3 }}>
+        <Alert severity="success" sx={{ mb: 4, borderRadius: 2 }}>
           Settings saved successfully!
         </Alert>
       )}
 
-      <Grid container spacing={3}>
+      <Grid container spacing={4}>
         {/* Profile Section */}
         <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                <Person sx={{ mr: 1, verticalAlign: "middle" }} />
+          <Card sx={{ borderRadius: 2, border: '1px solid #f0f0f0' }}>
+            <CardContent sx={{ p: 4 }}>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 500, mb: 3 }}>
                 Profile
               </Typography>
-              <Divider sx={{ mb: 2 }} />
 
-              <Box
-                sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}
-              >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 3, mb: 4 }}>
                 {user?.user_metadata?.avatar_url && (
                   <Avatar
                     src={user.user_metadata.avatar_url}
@@ -111,21 +106,19 @@ export default function SettingsPage() {
                   />
                 )}
                 <Box>
-                  <Typography variant="h6">
+                  <Typography variant="h6" sx={{ fontWeight: 500 }}>
                     {user?.user_metadata?.full_name ||
                       user?.user_metadata?.user_name ||
                       "Not signed in"}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     {user?.email || "No email provided"}
                   </Typography>
                   {isTwitterConnected && (
                     <Chip
-                      icon={<Twitter />}
                       label="Twitter Connected"
-                      color="primary"
                       size="small"
-                      sx={{ mt: 1 }}
+                      variant="outlined"
                     />
                   )}
                 </Box>
@@ -134,17 +127,13 @@ export default function SettingsPage() {
               {!isTwitterConnected ? (
                 <Button
                   variant="contained"
-                  startIcon={<LinkRounded />}
                   onClick={handleTwitterConnect}
-                  sx={{ mr: 1 }}
                 >
                   Connect Twitter
                 </Button>
               ) : (
                 <Button
                   variant="outlined"
-                  color="error"
-                  startIcon={<LinkOff />}
                   onClick={() => setDisconnectDialog(true)}
                 >
                   Disconnect Twitter
@@ -152,12 +141,8 @@ export default function SettingsPage() {
               )}
 
               {!user && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mb: 1 }}
-                  >
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Sign in to access all settings and features
                   </Typography>
                   <Link href="/" passHref style={{ textDecoration: "none" }}>
@@ -173,19 +158,16 @@ export default function SettingsPage() {
 
         {/* AI Customization Section */}
         <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                <SmartToy sx={{ mr: 1, verticalAlign: "middle" }} />
+          <Card sx={{ borderRadius: 2, border: '1px solid #f0f0f0' }}>
+            <CardContent sx={{ p: 4 }}>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 500, mb: 2 }}>
                 AI Customization
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Customize how AI refines your voice recordings into Twitter
-                posts
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+                Customize how AI refines your voice recordings into Twitter posts
               </Typography>
-              <Divider sx={{ mb: 2 }} />
 
-              <Box sx={{ mb: 3 }}>
+              <Box sx={{ mb: 4 }}>
                 <TextField
                   fullWidth
                   multiline
@@ -207,17 +189,15 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       handleSettingChange("autoPost", e.target.checked)
                     }
-                    color="primary"
                   />
                 }
                 label={
                   <Box>
-                    <Typography variant="body1">
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
                       Auto-post after AI refinement
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Automatically post to Twitter after recording,
-                      transcription, and AI refinement
+                      Automatically post to Twitter after recording, transcription, and AI refinement
                     </Typography>
                   </Box>
                 }
@@ -228,15 +208,14 @@ export default function SettingsPage() {
 
         {/* App Preferences Section */}
         <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+          <Card sx={{ borderRadius: 2, border: '1px solid #f0f0f0' }}>
+            <CardContent sx={{ p: 4 }}>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 500, mb: 3 }}>
                 App Preferences
               </Typography>
-              <Divider sx={{ mb: 2 }} />
 
-              <Box sx={{ mb: 2 }}>
-                <FormControl fullWidth sx={{ mb: 2 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <FormControl fullWidth>
                   <InputLabel>Theme</InputLabel>
                   <Select
                     value={settings.theme}
@@ -251,7 +230,7 @@ export default function SettingsPage() {
                   </Select>
                 </FormControl>
 
-                <FormControl fullWidth sx={{ mb: 2 }}>
+                <FormControl fullWidth>
                   <InputLabel>Language</InputLabel>
                   <Select
                     value={settings.language}
@@ -274,7 +253,6 @@ export default function SettingsPage() {
                       onChange={(e) =>
                         handleSettingChange("notifications", e.target.checked)
                       }
-                      color="primary"
                     />
                   }
                   label="Enable notifications"
@@ -286,19 +264,16 @@ export default function SettingsPage() {
 
         {/* Quick Actions Section */}
         <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+          <Card sx={{ borderRadius: 2, border: '1px solid #f0f0f0' }}>
+            <CardContent sx={{ p: 4 }}>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 500, mb: 3 }}>
                 Quick Actions
               </Typography>
-              <Divider sx={{ mb: 2 }} />
 
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <Button
                   variant="outlined"
-                  startIcon={<Refresh />}
                   onClick={() => {
-                    // Mock refresh action
                     console.log("Refreshing data...");
                   }}
                   fullWidth
@@ -309,9 +284,7 @@ export default function SettingsPage() {
 
                 <Button
                   variant="outlined"
-                  color="warning"
                   onClick={() => {
-                    // Clear localStorage and reset to defaults
                     localStorage.removeItem("talktopost-settings");
                     updateSetting('customPrompt', '');
                     updateSetting('autoPost', false);
@@ -330,17 +303,16 @@ export default function SettingsPage() {
       </Grid>
 
       {/* Save Button */}
-      <Box sx={{ mt: 4, display: "flex", justifyContent: "center" }}>
-                        <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<Save />}
-                  onClick={saveSettings}
-                  disabled={isSaving}
-                  sx={{ minWidth: 200 }}
-                >
-                  {isSaving ? "Saving..." : "Save Settings"}
-                </Button>
+      <Box sx={{ mt: 6, display: "flex", justifyContent: "center" }}>
+        <Button
+          variant="contained"
+          size="large"
+          onClick={saveSettings}
+          disabled={isSaving}
+          sx={{ minWidth: 200 }}
+        >
+          {isSaving ? "Saving..." : "Save Settings"}
+        </Button>
       </Box>
 
       {/* Disconnect Confirmation Dialog */}
@@ -348,16 +320,15 @@ export default function SettingsPage() {
         open={disconnectDialog}
         onClose={() => setDisconnectDialog(false)}
       >
-        <DialogTitle>Disconnect Twitter</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{ pb: 2 }}>Disconnect Twitter</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
           <Typography>
-            Are you sure you want to disconnect your Twitter account? You
-            won&apos;t be able to post tweets until you reconnect.
+            Are you sure you want to disconnect your Twitter account? You won&apos;t be able to post tweets until you reconnect.
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 3, pt: 2 }}>
           <Button onClick={() => setDisconnectDialog(false)}>Cancel</Button>
-          <Button onClick={handleTwitterDisconnect} color="error">
+          <Button onClick={handleTwitterDisconnect} variant="contained">
             Disconnect
           </Button>
         </DialogActions>
