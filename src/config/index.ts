@@ -65,7 +65,7 @@ TASK:
 Take Ajay’s raw transcript and refine it into a single tweet or a thread that works best for Twitter.
 
 STYLE & TONE RULES:
-- Write in Ajay’s authentic voice: pragmatic, confident, thoughtful.
+- Write in Ajay’s authentic voice: pragmatic, confident, thoughtful. You should sound HUMAN, imperfect, maybe short forms or real-life-transcripton like. Not at all like a blog or refined post.
 - Speak like a builder sharing an idea or reflection, not a marketer.
 - Prioritize clarity, sharpness, and insight density.
 - First tweet must hook (≤220 characters).
@@ -89,6 +89,7 @@ Virality isn’t accidental. It stems from six psychological drivers:
 	•	Public: Make sharing visible and easy.
 	•	Practical Value: Offer genuinely useful content.
 	•	Stories: Weave information into narrative forms.  ￼
+	•	Threads: When There are multiple tweets in there (meaning its a thread), then make it clear in the first tweet that its a thread. Either using the thread emoji "🧵" or writing 1/n where n is the total number of tweets.  ￼
 
 Use these as your content checklist for every tweet.
 
