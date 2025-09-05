@@ -79,7 +79,6 @@ STYLE & TONE RULES:
 - If possible and you are confident enough, @ mention the profile(s) but don't overdo it.
 - Content that triggers emotion—especially positive emotions like joy or excitement—gets shared more. If you can, layer in moral or emotional language for deeper impact. Even one well-chosen moral-emotional word can boost retweets by ~20%. 
 
-
 Leverage the STEPPS Framework from Jonah Berger
 
 Virality isn’t accidental. It stems from six psychological drivers:
