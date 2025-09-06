@@ -78,16 +78,17 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [editingDraft, setEditingDraft] = useState<Draft | null>(null)
   const [editedTweets, setEditedTweets] = useState<{ text: string; char_count: number }[]>([])
-  const [twitterConnected, setTwitterConnected] = useState(false)
   const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set())
   const [spacebarPressed, setSpacebarPressed] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
   const [requestingPermission, setRequestingPermission] = useState(false)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
 
-    useEffect(() => {
-    fetchRecordings()
-    checkTwitterConnection()
+  useEffect(() => {
+    // Only fetch recordings if user is authenticated
+    if (user) {
+      fetchRecordings()
+    }
 
     // Check for auth success/error from URL params
     const urlParams = new URLSearchParams(window.location.search)
@@ -96,13 +97,18 @@ export default function Home() {
       const twitterUserId = urlParams.get('twitter_user_id')
       const twitterUsername = urlParams.get('twitter_username')
       if (twitterUserId && twitterUsername) {
-        setTwitterConnected(true)
-        localStorage.setItem('twitter_connected', 'true')
-        localStorage.setItem('twitter_username', twitterUsername)
         setError(`✅ Twitter connected successfully! Welcome @${twitterUsername}`)
+        
+        // Store authentication state in localStorage as a fallback
+        localStorage.setItem('twitter_authenticated', 'true')
+        localStorage.setItem('twitter_user_id', twitterUserId)
+        localStorage.setItem('twitter_username', twitterUsername)
       } else {
         setError('✅ Authentication successful!')
       }
+      
+      // The AuthContext will handle session refresh automatically
+      
       // Remove the URL parameters after a delay
       setTimeout(() => {
         window.history.replaceState({}, '', window.location.pathname)
@@ -127,7 +133,7 @@ export default function Home() {
       // Remove the error parameter
       window.history.replaceState({}, '', window.location.pathname)
     }
-  }, [])
+  }, [user])
 
   // Check microphone permission status and request if needed
   const checkAndRequestMicrophonePermission = async () => {
@@ -188,15 +194,6 @@ export default function Home() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Listen for auth state changes and update Twitter connection status
-  useEffect(() => {
-    if (!user) {
-      // User signed out - clear Twitter connection
-      setTwitterConnected(false)
-      localStorage.removeItem('twitter_connected')
-      localStorage.removeItem('twitter_username')
-    }
-  }, [user])
 
   // Spacebar recording functionality
   useEffect(() => {
@@ -247,43 +244,6 @@ export default function Home() {
     }
   }
 
-  const checkTwitterConnection = async () => {
-    // Check localStorage for Twitter connection status first
-    const localConnected = localStorage.getItem('twitter_connected') === 'true'
-    const username = localStorage.getItem('twitter_username')
-    
-    if (localConnected && username) {
-      setTwitterConnected(true)
-    } else {
-      setTwitterConnected(false)
-    }
-
-    // Also check server-side Twitter status for accuracy
-    try {
-      const response = await fetch('/api/check-twitter-status')
-      const data = await response.json()
-      
-      if (data.success && data.summary.has_usable_account) {
-        setTwitterConnected(true)
-        // Update localStorage to match server state
-        localStorage.setItem('twitter_connected', 'true')
-        if (data.latest_valid_account?.screen_name) {
-          localStorage.setItem('twitter_username', data.latest_valid_account.screen_name)
-        }
-      } else {
-        // Server says no connection - clear everything
-        setTwitterConnected(false)
-        localStorage.removeItem('twitter_connected')
-        localStorage.removeItem('twitter_username')
-      }
-    } catch (error) {
-      console.error('Failed to check Twitter status:', error)
-      // If server check fails and localStorage says not connected, assume disconnected
-      if (!localConnected) {
-        setTwitterConnected(false)
-      }
-    }
-  }
 
 
 
@@ -548,13 +508,8 @@ export default function Home() {
       setLoading(true)
       console.log('Disconnecting from Twitter...')
       
-      // Sign out from Supabase
+      // Sign out from Supabase (AuthContext will handle localStorage clearing)
       await signOut()
-      
-      // Clear Twitter connection state
-      setTwitterConnected(false)
-      localStorage.removeItem('twitter_connected')
-      localStorage.removeItem('twitter_username')
       
       // Clear any error messages
       setError(null)
@@ -635,7 +590,7 @@ export default function Home() {
   }
 
   const handlePostDraft = async (draftId: string) => {
-    if (!twitterConnected) {
+    if (!isTwitterConnected) {
       setError('Please connect your Twitter account first')
       return
     }
@@ -688,22 +643,90 @@ export default function Home() {
     }
   }
 
-  return (
-    <Container maxWidth="md" sx={{ py: 6 }}>
-      {/* Compact Header */}
-      {/* <Box sx={{ textAlign: 'center', mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 400, mb: 1 }}>
-          Voice to Twitter
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Record your thoughts and get AI-refined tweets
-        </Typography>
-      </Box> */}
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <Container maxWidth="md" sx={{ py: 6, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <CircularProgress size={40} sx={{ mb: 2 }} />
+          <Typography variant="body1" color="text.secondary">
+            Loading...
+          </Typography>
+        </Box>
+      </Container>
+    )
+  }
 
+  // Check if user is authenticated via Supabase or localStorage fallback
+  const isAuthenticated = user || (typeof window !== 'undefined' && localStorage.getItem('twitter_authenticated') === 'true')
+  
+  // Show sign-in UI if user is not authenticated
+  if (!isAuthenticated) {
+    return (
+      <Container maxWidth="md" sx={{ py: 8 }}>
+        {/* Error Alert */}
+        {error && (
+          <Alert
+            severity={error.includes('✅') ? 'success' : 'error'}
+            sx={{ mb: 4, borderRadius: 2 }}
+            onClose={() => setError(null)}
+          >
+            {error}
+          </Alert>
+        )}
+
+        {/* Sign-in UI */}
+        <Box sx={{ 
+          textAlign: 'center', 
+          py: 10,
+          px: 6,
+          borderRadius: 3,
+          border: '1px solid #e0e0e0',
+          backgroundColor: '#fafafa',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+        }}>
+          <Typography variant="h3" component="h1" gutterBottom sx={{ fontWeight: 300, mb: 3, color: 'text.primary' }}>
+            Voice to Twitter
+          </Typography>
+          <Typography variant="h6" color="text.secondary" sx={{ mb: 6, maxWidth: 500, mx: 'auto', fontWeight: 400 }}>
+            Record your thoughts and get AI-refined tweets. Connect with Twitter to get started.
+          </Typography>
+          
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<Twitter />}
+            onClick={handleTwitterLogin}
+            disabled={loading}
+            sx={{ 
+              px: 6, 
+              py: 2,
+              fontSize: '1.2rem',
+              backgroundColor: '#1da1f2',
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 500,
+              '&:hover': {
+                backgroundColor: '#0d8bd9',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 12px rgba(29, 161, 242, 0.3)'
+              },
+              transition: 'all 0.2s ease-in-out'
+            }}
+          >
+            {loading ? 'Connecting...' : 'Sign in with Twitter'}
+          </Button>
+        </Box>
+      </Container>
+    )
+  }
+
+  return (
+    <Container maxWidth="md" sx={{ py: 4 }}>
       {/* Error Alert */}
       {error && (
         <Alert
-          severity="error"
+          severity={error.includes('✅') ? 'success' : 'error'}
           sx={{ mb: 4, borderRadius: 2 }}
           onClose={() => setError(null)}
         >
@@ -711,18 +734,19 @@ export default function Home() {
         </Alert>
       )}
 
-              {/* Recording Section */}
-        <Box sx={{ 
-          display: 'flex', 
-          flexDirection: 'column',
-          alignItems: 'center',
-          mb: 4,
-          py: 3,
-          px: 3,
-          border: '1px solid #f0f0f0',
-          borderRadius: 2,
-          backgroundColor: '#fafafa'
-        }}>
+      {/* Recording Section */}
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center',
+        mb: 6,
+        py: 6,
+        px: 4,
+        border: '1px solid #e0e0e0',
+        borderRadius: 3,
+        backgroundColor: '#fafafa',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+      }}>
         {/* Permission Request Button */}
         {hasPermission === false && (
           <Button
@@ -788,20 +812,28 @@ export default function Home() {
       )}
 
       {/* Recordings List */}
-      <Box>
+      <Box sx={{ mt: 2 }}>
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center', 
-          mb: 2
+          mb: 3,
+          p: 2,
+          backgroundColor: '#f8f9fa',
+          borderRadius: 2,
+          border: '1px solid #e9ecef'
         }}>
-          <Typography variant="h5" sx={{ fontWeight: 400 }}>
+          <Typography variant="h5" sx={{ fontWeight: 500, color: 'text.primary' }}>
             Recordings ({recordings.length})
           </Typography>
           <IconButton 
             onClick={fetchRecordings} 
             disabled={loading}
             size="small"
+            sx={{ 
+              backgroundColor: 'white',
+              '&:hover': { backgroundColor: '#f0f0f0' }
+            }}
           >
             <Refresh />
           </IconButton>

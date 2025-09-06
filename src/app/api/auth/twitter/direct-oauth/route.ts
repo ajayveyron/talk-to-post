@@ -60,10 +60,20 @@ export async function GET(request: NextRequest) {
       'user.fields': ['id', 'username', 'name', 'profile_image_url']
     })
 
-    console.log('Twitter user info:', { id: twitterUser.id, username: twitterUser.username })
+    console.log('Twitter user info:', { 
+      id: twitterUser.id, 
+      username: twitterUser.username, 
+      name: twitterUser.name,
+      profile_image_url: twitterUser.profile_image_url 
+    })
 
     // Create or update user in Supabase
     const userId = getSessionUserId(request)
+
+    if (!supabaseAdmin) {
+      console.error('Supabase admin client not available')
+      return NextResponse.redirect(new URL('/?error=server_config_error', request.url))
+    }
 
     // Check if Twitter account already exists
     const { data: existingAccount } = await supabaseAdmin
@@ -132,14 +142,54 @@ export async function GET(request: NextRequest) {
         console.error('Failed to update account record:', updateError)
       }
 
+      // Also update user metadata for existing users
+      const { error: userUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+        accountUserId,
+        {
+          user_metadata: {
+            twitter_id: twitterUser.id,
+            twitter_username: twitterUser.username,
+            twitter_name: twitterUser.name,
+            twitter_profile_image: twitterUser.profile_image_url,
+            provider: 'twitter'
+          }
+        }
+      )
+
+      if (userUpdateError) {
+        console.error('Failed to update user metadata:', userUpdateError)
+      }
+
       console.log('Twitter account updated successfully')
     }
 
-    // Clear OAuth cookies and redirect with success
+    // Create a session for the user using admin API
+    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: `twitter-${twitterUser.id}@temp.example.com`,
+      options: {
+        redirectTo: `${request.nextUrl.origin}/?auth=success&twitter_user_id=${twitterUser.id}&twitter_username=${twitterUser.username}`
+      }
+    })
+
+    if (sessionError || !sessionData) {
+      console.error('Failed to create session:', sessionError)
+      // Fallback to simple redirect
+      const response = NextResponse.redirect(new URL('/?auth=success&twitter_user_id=' + twitterUser.id + '&twitter_username=' + twitterUser.username, request.url))
+      response.cookies.delete('twitter_code_verifier')
+      response.cookies.delete('twitter_state')
+      return response
+    }
+
+    // Redirect to the magic link to establish the session
+    if (sessionData.properties?.action_link) {
+      return NextResponse.redirect(sessionData.properties.action_link)
+    }
+
+    // Fallback if no magic link
     const response = NextResponse.redirect(new URL('/?auth=success&twitter_user_id=' + twitterUser.id + '&twitter_username=' + twitterUser.username, request.url))
     response.cookies.delete('twitter_code_verifier')
     response.cookies.delete('twitter_state')
-
     return response
 
   } catch (error: any) {

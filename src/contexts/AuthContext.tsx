@@ -73,6 +73,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe()
   }, [supabase.auth])
+
+  // Handle OAuth callback success
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('auth') === 'success' && !user) {
+      // OAuth was successful but no user session yet
+      // Force a session refresh
+      const refreshSession = async () => {
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession()
+          if (!error && session) {
+            setSession(session)
+            setUser(session.user)
+            setLoading(false)
+          }
+        } catch (error) {
+          console.error('Failed to refresh session:', error)
+        }
+      }
+      
+      // Try to refresh session after a short delay
+      setTimeout(refreshSession, 1000)
+    }
+  }, [user, supabase.auth])
   
   const handleTwitterAccountSetup = async (user: User) => {
     try {
@@ -123,9 +149,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      console.error('Error signing out:', error)
+    try {
+      // Clear Supabase session
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('Error signing out:', error)
+        throw error
+      }
+      
+      // Clear localStorage fallback
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('twitter_authenticated')
+        localStorage.removeItem('twitter_user_id')
+        localStorage.removeItem('twitter_username')
+        localStorage.removeItem('twitter_connected')
+      }
+      
+      // Clear local state immediately
+      setUser(null)
+      setSession(null)
+      setLoading(false)
+      
+      // Redirect to home page to show sign-in UI
+      if (typeof window !== 'undefined') {
+        window.location.href = '/'
+      }
+      
+      console.log('Successfully signed out and cleared all authentication state')
+    } catch (error) {
+      console.error('Error during sign out:', error)
       throw error
     }
   }
