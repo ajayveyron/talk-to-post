@@ -84,10 +84,10 @@ export default function Home() {
   const [requestingPermission, setRequestingPermission] = useState(false)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
 
-  useEffect(() => {
+    useEffect(() => {
     // Only fetch recordings if user is authenticated
     if (user) {
-      fetchRecordings()
+    fetchRecordings()
     }
 
     // Check for auth success/error from URL params
@@ -491,6 +491,18 @@ export default function Home() {
     return text.substring(0, maxLength) + '...'
   }
 
+  const formatTimeAgo = (dateString: string) => {
+    const now = new Date()
+    const date = new Date(dateString)
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+    
+    if (diffInSeconds < 60) return 'now'
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h`
+    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d`
+    return date.toLocaleDateString()
+  }
+
   const handleTwitterLogin = async () => {
     console.log('Twitter login button clicked - starting direct OAuth flow')
 
@@ -645,7 +657,7 @@ export default function Home() {
 
   // Show loading state while checking authentication
   if (authLoading) {
-    return (
+  return (
       <Container maxWidth="md" sx={{ py: 6, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
         <Box sx={{ textAlign: 'center' }}>
           <CircularProgress size={40} sx={{ mb: 2 }} />
@@ -686,11 +698,11 @@ export default function Home() {
           boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
         }}>
           <Typography variant="h3" component="h1" gutterBottom sx={{ fontWeight: 300, mb: 3, color: 'text.primary' }}>
-            Voice to Twitter
-          </Typography>
+          Voice to Twitter
+        </Typography>
           <Typography variant="h6" color="text.secondary" sx={{ mb: 6, maxWidth: 500, mx: 'auto', fontWeight: 400 }}>
             Record your thoughts and get AI-refined tweets. Connect with Twitter to get started.
-          </Typography>
+        </Typography>
           
           <Button
             variant="contained"
@@ -734,11 +746,11 @@ export default function Home() {
         </Alert>
       )}
 
-      {/* Recording Section */}
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        alignItems: 'center',
+              {/* Recording Section */}
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          alignItems: 'center',
         mb: 6,
         py: 6,
         px: 4,
@@ -746,7 +758,7 @@ export default function Home() {
         borderRadius: 3,
         backgroundColor: '#fafafa',
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-      }}>
+        }}>
         {/* Permission Request Button */}
         {hasPermission === false && (
           <Button
@@ -840,346 +852,299 @@ export default function Home() {
         </Box>
 
         {recordings.map((recording) => (
-          <Card 
+          <Box 
             key={recording.id} 
             sx={{ 
-              mb: 2, 
-              borderRadius: 2,
-              fill: '#f5f5f5',
-              transition: 'border-color 0.2s ease-in-out',
+              mb: 3,
+              border: '1px solid #e1e8ed',
+              borderRadius: '16px',
+              backgroundColor: '#ffffff',
+              overflow: 'hidden',
+              transition: 'all 0.2s ease-in-out',
               '&:hover': {
-                borderColor: '#e0e0e0',
+                backgroundColor: '#f7f9fa',
                 cursor: 'pointer'
               }
             }}
           >
-            <CardContent sx={{ p: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                  {new Date(recording.created_at).toLocaleString()}
-                </Typography>
-                <Chip
-                  label={recording.status}
-                  size="small"
-                  variant="outlined"
+            {/* Header */}
+            <Box sx={{ display: 'flex', alignItems: 'center', p: 3, pb: 2 }}>
+              {/* Profile Picture */}
+              {user?.user_metadata?.twitter_profile_image ? (
+                <img 
+                  src={user.user_metadata.twitter_profile_image} 
+                  alt="Profile"
+                  style={{ 
+                    width: 48, 
+                    height: 48, 
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    marginRight: 16
+                  }}
                 />
-              </Box>
-
-              {recording.transcripts && recording.transcripts[0] && (
-                <Box sx={{ mb: 2, p: 2, bgcolor: '#fafafa', borderRadius: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: 'text.secondary' }}>
-                    Transcript
-                  </Typography>
-                  <Typography variant="body2" sx={{ lineHeight: 1.5, fontStyle: 'italic' }}>
-                    "{truncateText(recording.transcripts[0].text, 120)}"
+              ) : (
+                <Box sx={{ 
+                  width: 48, 
+                  height: 48, 
+                  borderRadius: '50%', 
+                  backgroundColor: '#1da1f2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mr: 2,
+                  flexShrink: 0
+                }}>
+                  <Typography sx={{ color: 'white', fontWeight: 600, fontSize: '1rem' }}>
+                    {user?.user_metadata?.twitter_name?.charAt(0) || user?.user_metadata?.full_name?.charAt(0) || 'U'}
                   </Typography>
                 </Box>
               )}
 
-              {recording.drafts && recording.drafts[0] && (
-                <Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      AI Draft ({recording.drafts[0].mode})
-                    </Typography>
-                    {recording.drafts[0].thread.length > 1 && (
-                      <Button
-                        size="small"
-                        onClick={() => toggleThreadCollapse(recording.id)}
-                        sx={{ 
-                          textTransform: 'none',
-                          fontSize: '0.75rem',
-                          minWidth: 'auto',
-                          px: 1
-                        }}
-                      >
-                        {collapsedThreads.has(recording.id) ? 'Show thread' : 'Collapse thread'}
-                      </Button>
-                    )}
-                  </Box>
-                  
-                  {/* Attachments Preview */}
-                  {recording.drafts[0].attachments && recording.drafts[0].attachments.length > 0 && (
-                    <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-                      <Typography variant="body2" sx={{ mb: 2, fontWeight: 500, color: 'text.secondary' }}>
-                        Attachments ({recording.drafts[0].attachments.length})
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                        {recording.drafts[0].attachments.map((attachment) => (
-                          <Box key={attachment.id} sx={{ 
-                            border: '1px solid #e0e0e0', 
-                            borderRadius: 2, 
-                            overflow: 'hidden',
-                            backgroundColor: '#ffffff',
-                            maxWidth: 200
-                          }}>
-                            {attachment.media_type === 'image' ? (
-                              <Box sx={{ position: 'relative', width: '100%', height: '120px' }}>
-                                <img 
-                                  src={`/api/attachments/${attachment.id}/preview`}
-                                  alt={attachment.filename}
-                                  style={{ 
-                                    width: '100%', 
-                                    height: '100%', 
-                                    objectFit: 'cover',
-                                    display: 'block'
-                                  }}
-                                  onError={(e) => {
-                                    // Fallback to a placeholder if image fails to load
-                                    e.currentTarget.style.display = 'none';
-                                    const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
-                                    if (nextElement) {
-                                      nextElement.style.display = 'flex';
-                                    }
-                                  }}
-                                />
-                                <Box sx={{ 
-                                  display: 'none',
+              {/* User Info */}
+              <Box sx={{ flex: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#000000' }}>
+                    {user?.user_metadata?.twitter_name || user?.user_metadata?.full_name || 'User'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#536471' }}>
+                    @{user?.user_metadata?.twitter_username || user?.user_metadata?.user_name || 'username'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#536471' }}>·</Typography>
+                  <Typography variant="body2" sx={{ color: '#536471' }}>
+                    {formatTimeAgo(recording.created_at)}
+                  </Typography>
+                  <Chip
+                    label={recording.status}
+                    size="small"
+                    variant="outlined"
+                    sx={{ ml: 1, height: 20, fontSize: '0.75rem' }}
+                  />
+                </Box>
+              </Box>
+            </Box>
+
+            {/* Content */}
+            <Box sx={{ px: 3, pb: 2 }}>
+              {/* Original Recording */}
+              {recording.transcripts?.[0] && (
+                <Box sx={{ 
+                  mb: 2, 
+                  p: 2, 
+                  bgcolor: '#f7f9fa', 
+                  borderRadius: '12px',
+                  border: '1px solid #e1e8ed'
+                }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: '#536471', fontSize: '0.875rem' }}>
+                    Original Recording
+                  </Typography>
+                  <Typography variant="body2" sx={{ lineHeight: 1.5, color: '#0f1419', fontSize: '0.95rem' }}>
+                    "{truncateText(recording.transcripts[0].text, 200)}"
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Draft Content */}
+              {recording.drafts?.[0] && (
+                <>
+                  {/* Attachments */}
+                  {recording.drafts?.[0]?.attachments && recording.drafts[0].attachments.length > 0 && (
+                    <Box sx={{ mb: 2, borderRadius: '12px', overflow: 'hidden', border: '1px solid #e1e8ed' }}>
+                      {recording.drafts[0].attachments.length === 1 ? (
+                        <img 
+                          src={`/api/attachments/${recording.drafts[0].attachments[0].id}/preview`}
+                          alt={recording.drafts[0].attachments[0].filename}
+                          style={{ width: '100%', height: '300px', objectFit: 'cover', display: 'block' }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (nextElement) nextElement.style.display = 'flex';
+                          }}
+                        />
+                      ) : (
+                        <Box sx={{ 
+                          display: 'grid',
+                          gridTemplateColumns: recording.drafts[0].attachments.length === 2 ? '1fr 1fr' : '1fr 1fr',
+                          gap: '2px',
+                          height: '200px'
+                        }}>
+                          {recording.drafts[0].attachments.slice(0, 4).map((attachment, index) => (
+                            <Box key={attachment.id} sx={{ position: 'relative', overflow: 'hidden' }}>
+                              <img 
+                                src={`/api/attachments/${attachment.id}/preview`}
+                                alt={attachment.filename}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                              />
+                              {index === 3 && recording.drafts?.[0]?.attachments && recording.drafts[0].attachments.length > 4 && (
+                                <Box sx={{
                                   position: 'absolute',
                                   top: 0,
                                   left: 0,
-                                  width: '100%', 
-                                  height: '100%', 
-                                  alignItems: 'center', 
+                                  right: 0,
+                                  bottom: 0,
+                                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                                  display: 'flex',
+                                  alignItems: 'center',
                                   justifyContent: 'center',
-                                  backgroundColor: '#f5f5f5',
-                                  color: 'text.secondary'
+                                  color: 'white',
+                                  fontSize: '1.5rem',
+                                  fontWeight: 700
                                 }}>
-                                  <Image fontSize="large" />
+                                  +{recording.drafts?.[0]?.attachments?.length ? recording.drafts[0].attachments.length - 4 : 0}
                                 </Box>
-                              </Box>
-                            ) : attachment.media_type === 'video' ? (
-                              <Box sx={{ 
-                                width: '100%', 
-                                height: '120px', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
-                                backgroundColor: '#f5f5f5',
-                                color: 'text.secondary'
-                              }}>
-                                <PlayArrow fontSize="large" />
-                              </Box>
-                            ) : (
-                              <Box sx={{ 
-                                width: '100%', 
-                                height: '120px', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
-                                backgroundColor: '#f5f5f5',
-                                color: 'text.secondary'
-                              }}>
-                                <AttachFile fontSize="large" />
-                              </Box>
-                            )}
-                            <Box sx={{ p: 2 }}>
-                              <Typography variant="body2" sx={{ 
-                                fontWeight: 500, 
-                                mb: 0.5,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}>
-                                {attachment.filename}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {formatFileSize(attachment.file_size)}
-                              </Typography>
+                              )}
                             </Box>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
-
-                  {recording.drafts[0].thread.map((tweet, index) => {
-                    const isCollapsed = collapsedThreads.has(recording.id)
-                    const shouldShow = !isCollapsed || index === 0 || index === recording.drafts![0].thread.length - 1
-                    
-                    if (!shouldShow) return null
-                    
-                    return (
-                    <Box key={index}>
-                      {/* Twitter-style tweet card */}
-                      <Box sx={{ 
-                        mb: index < recording.drafts![0].thread.length - 1 ? 2 : 0, 
-                        border: '1px solid #e0e0e0',
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        backgroundColor: '#ffffff',
-                        position: 'relative'
-                      }}>
-                        {/* Tweet header */}
-                        <Box sx={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          p: 2, 
-                          pb: 1,
-                          borderBottom: '1px solid #f0f0f0'
-                        }}>
-                          <Box sx={{ 
-                            width: 40, 
-                            height: 40, 
-                            borderRadius: '50%', 
-                            backgroundColor: '#1da1f2',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            mr: 2,
-                            flexShrink: 0
-                          }}>
-                            <Typography sx={{ color: 'white', fontWeight: 600, fontSize: '0.875rem' }}>
-                              {user?.user_metadata?.full_name?.charAt(0) || 'U'}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#000000' }}>
-                                {user?.user_metadata?.full_name || 'User'}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#666666' }}>
-                                @{user?.user_metadata?.user_name || 'username'}
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#666666' }}>
-                                ·
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: '#666666' }}>
-                                now
-                              </Typography>
-                            </Box>
-                          </Box>
-                          {recording.drafts && recording.drafts[0] && recording.drafts[0].thread.length > 1 && (
-                            <Chip 
-                              label={`${index + 1}/${recording.drafts[0].thread.length}`}
-                              size="small"
-                              variant="outlined"
-                              sx={{ 
-                                fontSize: '0.75rem',
-                                height: 20,
-                                '& .MuiChip-label': { px: 1 }
-                              }}
-                            />
-                          )}
-                        </Box>
-
-                        {/* Tweet content */}
-                        <Box sx={{ p: 2, pt: 1 }}>
-                          <Typography variant="body1" sx={{ 
-                            lineHeight: 1.5,
-                            color: '#000000',
-                            fontSize: '0.95rem'
-                          }}>
-                            {tweet.text}
-                          </Typography>
-                          
-                          {/* Tweet footer */}
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'space-between',
-                            pt: 1,
-                            borderTop: '1px solid #f8f8f8'
-                          }}>
-                            <Typography variant="caption" sx={{ color: '#666666' }}>
-                              {tweet.char_count}/280 characters
-                            </Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Typography variant="caption" sx={{ color: '#666666' }}>
-                                Draft
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Box>
-                      </Box>
-                      
-                      {/* Thread connector */}
-                      {index < recording.drafts![0].thread.length - 1 && (
-                        <Box sx={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          position: 'relative'
-                        }}>
-                          {/* Vertical line */}
-                          <Box sx={{ 
-                            position: 'absolute',
-                            left: '50%',
-                            top: 0,
-                            bottom: 0,
-                            width: '2px',
-                            backgroundColor: '#e0e0e0'
-                          }} />
-                          
-                          {/* Join button */}
-                          <IconButton
-                            size="small"
-                            onClick={() => handleJoinTweets(index, recording.id, recording.drafts![0].id, false)}
-                            sx={{ 
-                              backgroundColor: '#ffffff',
-                              border: '2px solid #e0e0e0',
-                              zIndex: 1,
-                              '&:hover': {
-                                borderColor: '#1da1f2',
-                                backgroundColor: '#f0f8ff'
-                              }
-                            }}
-                            title="Join with next tweet"
-                          >
-                            <Add fontSize="small" sx={{ color: '#666666' }} />
-                          </IconButton>
+                          ))}
                         </Box>
                       )}
                     </Box>
-                    )
-                  })}
-                  
-                  {/* Collapsed thread indicator */}
-                  {collapsedThreads.has(recording.id) && recording.drafts[0].thread.length > 2 && (
-                    <Box sx={{ 
-                      textAlign: 'center', 
-                      py: 2, 
-                      color: 'text.secondary',
-                      borderTop: '1px solid #f0f0f0',
-                      borderBottom: '1px solid #f0f0f0',
-                      backgroundColor: '#fafafa'
-                    }}>
-                      <Typography variant="body2">
-                        {recording.drafts[0].thread.length - 2} more tweet{recording.drafts[0].thread.length - 2 !== 1 ? 's' : ''} in thread
-                      </Typography>
-                    </Box>
                   )}
+
+                {/* Thread */}
+                {recording.drafts?.[0]?.thread && recording.drafts[0].thread.length > 0 && (
+                  <Box sx={{ border: '1px solid #e1e8ed', borderRadius: '16px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+                    {recording.drafts[0].thread.map((tweet, index) => {
+                      const isCollapsed = collapsedThreads.has(recording.id)
+                      const shouldShow = !isCollapsed || index === 0 || index === (recording.drafts?.[0]?.thread?.length || 1) - 1
+                      
+                      if (!shouldShow) return null
+                      
+                      return (
+                        <Box key={index} sx={{ 
+                          position: 'relative',
+                          borderBottom: index < (recording.drafts?.[0]?.thread?.length || 1) - 1 ? '1px solid #e1e8ed' : 'none',
+                          '&:hover': { backgroundColor: '#f7f9fa' }
+                        }}>
+                          {/* Thread connector */}
+                          {index > 0 && (
+                            <Box sx={{
+                              position: 'absolute',
+                              left: '24px',
+                              top: 0,
+                              bottom: 0,
+                              width: '2px',
+                              backgroundColor: '#e1e8ed',
+                              zIndex: 1
+                            }} />
+                          )}
+                          
+                          {/* Tweet */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', p: 3, pl: index > 0 ? 5 : 3, position: 'relative', zIndex: 2 }}>
+                            {/* Profile Picture */}
+                            {user?.user_metadata?.twitter_profile_image ? (
+                              <img 
+                                src={user.user_metadata.twitter_profile_image} 
+                                alt="Profile"
+                                style={{ 
+                                  width: 40, 
+                                  height: 40, 
+                                  borderRadius: '50%',
+                                  objectFit: 'cover',
+                                  marginRight: 16
+                                }}
+                              />
+                            ) : (
+                              <Box sx={{ 
+                                width: 40, 
+                                height: 40, 
+                                borderRadius: '50%', 
+                                backgroundColor: '#1da1f2',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                mr: 2,
+                                flexShrink: 0
+                              }}>
+                                <Typography sx={{ color: 'white', fontWeight: 600, fontSize: '0.875rem' }}>
+                                  {user?.user_metadata?.twitter_name?.charAt(0) || user?.user_metadata?.full_name?.charAt(0) || 'U'}
+                                </Typography>
+                              </Box>
+                            )}
+
+                            {/* Content */}
+                            <Box sx={{ flex: 1 }}>
+                              {/* Header */}
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, color: '#000000' }}>
+                                  {user?.user_metadata?.twitter_name || user?.user_metadata?.full_name || 'User'}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#536471' }}>
+                                  @{user?.user_metadata?.twitter_username || user?.user_metadata?.user_name || 'username'}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#536471' }}>·</Typography>
+                                <Typography variant="body2" sx={{ color: '#536471' }}>
+                                  {formatTimeAgo(recording.created_at)}
+                                </Typography>
+                                {recording.drafts?.[0]?.thread && recording.drafts[0].thread.length > 1 && (
+                                  <Chip 
+                                    label={`${index + 1}/${recording.drafts[0].thread.length}`}
+                                    size="small"
+                                    variant="filled"
+                                    sx={{ ml: 1, fontSize: '0.75rem', height: 20 }}
+                                  />
+                                )}
+                              </Box>
+
+                              {/* Text */}
+                              <Typography variant="body1" sx={{ lineHeight: 1.5, color: '#0f1419', fontSize: '0.95rem', mb: 1 }}>
+                                {tweet.text}
+                              </Typography>
+
+                              {/* Footer */}
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pt: 1 }}>
+                                <Typography variant="caption" sx={{ 
+                                  color: tweet.char_count > 280 ? '#e0245e' : '#536471',
+                                  fontWeight: tweet.char_count > 280 ? 600 : 400
+                                }}>
+                                  {tweet.char_count}/280 characters
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: '#536471' }}>Draft</Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                        </Box>
+                      )
+                    })}
                   </Box>
                 )}
+                </>
+              )}
 
-              {recording.posts && recording.posts[0] && (
-                <Box sx={{ mt: 2, p: 2, backgroundColor: '#f0f8ff', borderRadius: 1, border: '1px solid #1da1f2' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#1da1f2' }}>
-                      ✓ Posted to Twitter
-                    </Typography>
-                    {settings.autoPost && (
-                      <Chip
-                        label="Auto-posted"
-                        size="small"
-                        sx={{ 
-                          backgroundColor: '#1da1f2',
-                          color: 'white',
-                          fontSize: '0.75rem',
-                          height: 20
-                        }}
-                      />
-                    )}
-                    <Typography variant="caption" sx={{ color: '#666666', ml: 'auto' }}>
-                      {new Date(recording.posts[0].posted_at).toLocaleString()}
-                    </Typography>
-                  </Box>
+              {/* Posted Status */}
+              {recording.posts?.[0] && (
+                <Box sx={{ 
+                  mt: 2, 
+                  p: 2, 
+                  backgroundColor: '#f0f8ff', 
+                  borderRadius: '12px', 
+                  border: '1px solid #1da1f2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
+                }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#1da1f2' }}>
+                    ✓ Posted to Twitter
+                  </Typography>
+                  {settings.autoPost && (
+                    <Chip label="Auto-posted" size="small" sx={{ backgroundColor: '#1da1f2', color: 'white', fontSize: '0.75rem', height: 20 }} />
+                  )}
+                  <Typography variant="caption" sx={{ color: '#536471', ml: 'auto' }}>
+                    {formatTimeAgo(recording.posts[0].posted_at)}
+                  </Typography>
                 </Box>
               )}
 
               {/* Actions */}
-              {recording.status === 'ready' && recording.drafts && recording.drafts[0] && (
-                <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #f0f0f0', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {recording.status === 'ready' && recording.drafts?.[0] && (
+                <Box sx={{ 
+                  mt: 2, 
+                  pt: 2, 
+                  borderTop: '1px solid #e1e8ed', 
+                  display: 'flex', 
+                  gap: 1, 
+                  flexWrap: 'wrap',
+                  px: 3,
+                  pb: 3
+                }}>
                   <Button
                     variant="outlined"
                     size="small"
@@ -1232,23 +1197,23 @@ export default function Home() {
                   )}
                 </Box>
               )}
-            </CardContent>
-            </Card>
-          ))}
+            </Box>
+          </Box>
+        ))}
 
         {recordings.length === 0 && (
           <Box sx={{ 
             textAlign: 'center', 
             py: 8, 
             px: 4,
-            borderRadius: 2,
-            border: '1px dashed #e0e0e0',
-            backgroundColor: '#fafafa'
+            borderRadius: '16px',
+            border: '1px solid #e1e8ed',
+            backgroundColor: '#ffffff'
           }}>
-            <Typography variant="h6" color="text.secondary" sx={{ mb: 2, fontWeight: 400 }}>
+            <Typography variant="h6" color="#536471" sx={{ mb: 2, fontWeight: 400 }}>
               No recordings yet
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="#536471">
               Start by recording your first voice note
             </Typography>
           </Box>
@@ -1267,9 +1232,9 @@ export default function Home() {
               </Typography>
               
               {/* Existing Attachments */}
-              {editingDraft?.attachments && editingDraft.attachments.length > 0 && (
+              {editingDraft && editingDraft.attachments && editingDraft.attachments.length > 0 && (
                 <Box sx={{ mb: 3 }}>
-                  {editingDraft.attachments.map((attachment) => (
+                  {editingDraft?.attachments?.map((attachment) => (
                     <Box key={attachment.id} sx={{ 
                       display: 'flex', 
                       alignItems: 'center', 
