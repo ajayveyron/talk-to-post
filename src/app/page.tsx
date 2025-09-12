@@ -41,6 +41,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useSettings } from '@/contexts/SettingsContext'
 import { validateAttachmentFile, formatFileSize } from '@/utils/fileValidation'
+import TwitterActivityGraph from '@/components/TwitterActivityGraph'
 
 interface Recording {
   id: string
@@ -816,6 +817,13 @@ export default function Home() {
           </Typography>
         )}
       </Box>
+
+      {/* Twitter Activity Graph */}
+      {isTwitterConnected && (
+        <Box sx={{ mb: 6 }}>
+          <TwitterActivityGraph userId={user?.id} />
+        </Box>
+      )}
 
       {loading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
